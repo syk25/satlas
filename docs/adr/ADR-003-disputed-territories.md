@@ -57,3 +57,9 @@ Regions under military occupation that are internationally recognized as belongi
 - README and UI include a boundary disclaimer
 - Disputed borders sourced from Natural Earth's `ne_10m_admin_0_disputed_areas` dataset for visual styling
 - Access from mainland China may be limited due to Taiwan display policy
+
+## Boundary Data Extensibility
+
+MVP uses Natural Earth land polygons only (no maritime boundaries). The satellite-over-country intersection logic treats boundary polygons as interchangeable inputs — it does not depend on the data source. This allows maritime boundaries (e.g., territorial sea) to be added later as a data update without code changes.
+
+Maritime boundary data (Marine Regions / VLIZ, CC-BY) was evaluated and deferred: the data source imposes a "scientific and research purposes" use restriction that creates ambiguity under a COSS commercial model, and the raw data may not be redistributed via API. If added in a future phase, the intersection engine requires no modification — only the polygon dataset changes.
