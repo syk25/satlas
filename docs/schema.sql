@@ -6,6 +6,7 @@
 -- ────────────────────────────────────────
 
 CREATE TYPE orbit_class_type AS ENUM ('LEO', 'MEO', 'GEO', 'HEO');
+CREATE TYPE operator_type AS ENUM ('GOVERNMENT', 'COMMERCIAL', 'INTERNATIONAL');
 
 -- ────────────────────────────────────────
 -- SATELLITES
@@ -15,7 +16,9 @@ CREATE TABLE satellites (
   id               SERIAL PRIMARY KEY,
   norad_id         INTEGER UNIQUE NOT NULL,
   name             TEXT NOT NULL,
-  operator_country CHAR(2),                        -- ISO 3166-1 alpha-2
+  operator_country CHAR(2),                        -- ISO 3166-1 alpha-2 (본사/등록 국가)
+  operator_name    TEXT,                            -- "SpaceX", "ESA", "Intelsat"
+  operator_type    operator_type,                   -- GOVERNMENT / COMMERCIAL / INTERNATIONAL
   orbit_class      orbit_class_type,
   launch_date      DATE,
   is_active        BOOLEAN DEFAULT TRUE,
