@@ -1,22 +1,5 @@
 # Satlas — User Flows
 
-## Competitive Positioning
-
-Existing satellite tracking services answer one of two questions:
-
-| Perspective | Services | Question |
-|---|---|---|
-| Observer-based | N2YO, Heavens-Above | "What can I see from my location?" |
-| Satellite-based | Space-Track, CelesTrak | "What is this satellite doing?" |
-
-Satlas answers a third question no existing service addresses directly:
-
-> **"Which satellites pass over this country's territory, and for how long?"**
-
-National territory is the first-class query unit. A user selects a country — not a coordinate — and receives satellite pass data aggregated across the entire territory.
-
----
-
 ## UI User Flow
 
 ### 1. Landing
