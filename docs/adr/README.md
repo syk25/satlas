@@ -15,6 +15,7 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-003](ADR-003-disputed-territories.md) | Disputed Territory Policy — Natural Earth + Visual Distinction | Accepted |
 | [ADR-004](ADR-004-system-architecture.md) | System Architecture — Dual-Mode Service + Load Assumptions | Accepted |
 | [ADR-005](ADR-005-data-storage-strategy.md) | Data Storage Strategy — TLE Snapshots + Phased Pre-computation | Accepted |
+| [ADR-006](ADR-006-authentication-strategy.md) | Authentication Strategy — OAuth2-First with Passkey Pre-design | Accepted |
 
 ---
 
