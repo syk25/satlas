@@ -16,6 +16,7 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-004](ADR-004-system-architecture.md) | System Architecture — Dual-Mode Service + Load Assumptions | Accepted |
 | [ADR-005](ADR-005-data-storage-strategy.md) | Data Storage Strategy — TLE Snapshots + Phased Pre-computation | Accepted |
 | [ADR-006](ADR-006-authentication-strategy.md) | Authentication Strategy — OAuth2-First with Passkey Pre-design | Accepted |
+| [ADR-007](ADR-007-api-design-style.md) | API Design Style — REST over GraphQL | Accepted |
 
 ---
 
