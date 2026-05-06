@@ -19,6 +19,7 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-007](ADR-007-api-design-style.md) | API Design Style — REST over GraphQL | Accepted |
 | [ADR-008](ADR-008-monorepo-structure.md) | Repository Structure — Monorepo | Accepted |
 | [ADR-009](ADR-009-orm-strategy.md) | Database Access Strategy — SQLAlchemy ORM + Alembic | Accepted |
+| [ADR-010](ADR-010-testing-strategy.md) | Testing Strategy — Real Database, No Mocks | Accepted |
 
 ---
 
