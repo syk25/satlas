@@ -6,7 +6,11 @@
 -- ────────────────────────────────────────
 
 CREATE TYPE orbit_class_type AS ENUM ('LEO', 'MEO', 'GEO', 'HEO');
-CREATE TYPE operator_type AS ENUM ('GOVERNMENT', 'COMMERCIAL', 'INTERNATIONAL');
+CREATE TYPE operator_type AS ENUM ('GOVERNMENT', 'MILITARY', 'COMMERCIAL', 'INTERNATIONAL');
+-- GOVERNMENT: civil government agencies and academic institutions (NASA, JAXA, universities)
+-- MILITARY: defense-purpose satellites
+-- COMMERCIAL: private companies (SpaceX, SES, Eutelsat); operator_country = country of legal incorporation
+-- INTERNATIONAL: multinational bodies with no single country attribution (ESA, ITU); operator_country = NULL
 
 -- ────────────────────────────────────────
 -- SATELLITES
@@ -16,9 +20,9 @@ CREATE TABLE satellites (
   id               SERIAL PRIMARY KEY,
   norad_id         INTEGER UNIQUE NOT NULL,
   name             TEXT NOT NULL,
-  operator_country CHAR(2),                        -- ISO 3166-1 alpha-2 (본사/등록 국가)
-  operator_name    TEXT,                            -- "SpaceX", "ESA", "Intelsat"
-  operator_type    operator_type,                   -- GOVERNMENT / COMMERCIAL / INTERNATIONAL
+  operator_country CHAR(2),                        -- ISO 3166-1 alpha-2 (country of legal incorporation/HQ)
+  operator_name    TEXT,                            -- e.g. "SpaceX", "ESA", "Intelsat"
+  operator_type    operator_type,                   -- GOVERNMENT / MILITARY / COMMERCIAL / INTERNATIONAL
   orbit_class      orbit_class_type,
   launch_date      DATE,
   is_active        BOOLEAN DEFAULT TRUE,
@@ -34,8 +38,8 @@ CREATE TABLE tle_snapshots (
   satellite_id INTEGER NOT NULL REFERENCES satellites(id),
   line1        CHAR(69) NOT NULL,
   line2        CHAR(69) NOT NULL,
-  epoch        TIMESTAMPTZ NOT NULL,               -- TLE 기준 시각 (CelesTrak 발행 시각)
-  ingested_at  TIMESTAMPTZ DEFAULT now()           -- 우리 시스템이 저장한 시각
+  epoch        TIMESTAMPTZ NOT NULL,               -- reference epoch of the orbital elements (CelesTrak issue time)
+  ingested_at  TIMESTAMPTZ DEFAULT now()           -- timestamp when our system stored this TLE
 );
 
 CREATE INDEX ON tle_snapshots (satellite_id, ingested_at DESC);
@@ -56,7 +60,7 @@ CREATE TABLE predicted_passes (
   entry_lon        REAL,
   exit_lat         REAL,
   exit_lon         REAL,
-  predicted_at     TIMESTAMPTZ NOT NULL             -- 이 예측을 생성한 시각
+  predicted_at     TIMESTAMPTZ NOT NULL             -- timestamp when this prediction was generated
 );
 
 CREATE INDEX ON predicted_passes (country_code, entry_time);
@@ -101,7 +105,7 @@ CREATE TABLE oauth_accounts (
   UNIQUE (provider, provider_user_id)
 );
 
--- Phase 2: 활성화 대기 (Issue #5)
+-- Phase 2: dormant until passkey feature is activated (Issue #5)
 CREATE TABLE passkey_credentials (
   id            SERIAL PRIMARY KEY,
   user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
