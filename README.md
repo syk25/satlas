@@ -1,6 +1,6 @@
 # Satlas
 
-An open-source platform that provides satellite pass and dwell information based on national territory.
+An open-source platform that provides satellite pass and dwell information by country and territory.
 
 ---
 
@@ -14,7 +14,7 @@ Existing satellite tracking tools answer one of two questions:
 | Ownership-based | UCS Satellite Database | "Which country built this satellite?" |
 
 Satlas takes a third perspective — territorial:
-"Which satellites pass over this country's airspace, and for how long?"
+"Which satellites pass over this country, and for how long?"
 
 Previously, answering this question required checking each satellite's orbit individually or manually fitting coordinate-based tools to a national boundary. Satlas reduces this to a single country selection.
 
@@ -27,7 +27,6 @@ Previously, answering this question required checking each satellite's orbit ind
 - Quantify dwell time per satellite
 - Visualize theoretical observation footprint (nadir / horizon)
 - Track pass count and next expected pass time
-- Filter by mission type (communications / reconnaissance / observation)
 - Analyze the breakdown of satellites by operating country
 
 ---
