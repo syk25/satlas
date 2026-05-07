@@ -124,7 +124,10 @@ async def refresh_tle(db: AsyncSession) -> int:
     total = 0
     feed_count = len(CATEGORY_FEEDS)
 
-    async with httpx.AsyncClient(timeout=30, headers=_HEADERS, http2=False) as client:
+    timeout = httpx.Timeout(connect=15, read=120, write=15, pool=15)
+    async with httpx.AsyncClient(
+        timeout=timeout, headers=_HEADERS, http2=False
+    ) as client:
         for idx, (group, category) in enumerate(CATEGORY_FEEDS, 1):
             logger.info("[%d/%d] fetching feed: %s", idx, feed_count, group)
             blocks = await _fetch_raw(client, group)
