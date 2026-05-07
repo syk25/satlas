@@ -2,7 +2,6 @@ import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -17,8 +16,13 @@ def boundaries_loaded():
 
 @pytest.fixture
 def client():
-    with TestClient(app) as c:
-        yield c
+    with (
+        patch("app.main.refresh_tle", new_callable=AsyncMock),
+        patch("app.main.start_scheduler"),
+        patch("app.main.stop_scheduler"),
+    ):
+        with TestClient(app) as c:
+            yield c
 
 
 def test_overhead_invalid_country(client):
@@ -26,7 +30,8 @@ def test_overhead_invalid_country(client):
     assert response.status_code == 404
 
 
-def test_overhead_celestrak_unavailable(client):
+def test_overhead_no_tle_data(client):
+    """503 when DB has no TLE data (e.g. CelesTrak was down at startup)."""
     with (
         patch(
             "app.routers.satellites.cache.cache_get",
@@ -34,24 +39,15 @@ def test_overhead_celestrak_unavailable(client):
             return_value=None,
         ),
         patch(
-            "app.routers.satellites.cache.cache_set",
-            new_callable=AsyncMock,
-        ),
-        patch(
             "app.routers.satellites.get_latest_tle_snapshots",
             new_callable=AsyncMock,
             return_value=[],
-        ),
-        patch(
-            "app.routers.satellites.fetch_and_store_tle",
-            new_callable=AsyncMock,
-            side_effect=httpx.HTTPError("connection failed"),
         ),
     ):
         response = client.get("/satellites/overhead/KR")
 
     assert response.status_code == 503
-    assert "unavailable" in response.json()["detail"].lower()
+    assert "not yet available" in response.json()["detail"].lower()
 
 
 def test_overhead_cache_hit_skips_db(client):

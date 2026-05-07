@@ -39,3 +39,14 @@ async def cache_set(key: str, value: str, ttl: int = 60) -> None:
         await _redis.set(key, value, ex=ttl)
     except RedisError:
         logger.warning("Redis cache_set failed", extra={"key": key})
+
+
+async def cache_clear_pattern(pattern: str) -> None:
+    if _redis is None:
+        return
+    try:
+        keys = [key async for key in _redis.scan_iter(pattern)]
+        if keys:
+            await _redis.delete(*keys)
+    except RedisError:
+        logger.warning("Redis cache_clear_pattern failed", extra={"pattern": pattern})

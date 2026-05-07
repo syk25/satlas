@@ -2,7 +2,6 @@ import json
 from datetime import datetime, timezone
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,12 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.services import boundaries, cache
 from app.services.position import get_position
-from app.services.tle_ingest import (
-    CELESTRAK_STATIONS_URL,
-    CELESTRAK_URL,
-    fetch_and_store_tle,
-    get_latest_tle_snapshots,
-)
+from app.services.tle_ingest import get_latest_tle_snapshots
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -52,20 +46,11 @@ async def get_overhead(
         return [SatelliteOverhead(**item) for item in json.loads(cached)]
 
     rows = await get_latest_tle_snapshots(db)
-
-    # Seed DB on first request if empty.
-    # Falls back to stations group if active group is rate-limited.
     if not rows:
-        try:
-            count = await fetch_and_store_tle(db, url=CELESTRAK_URL)
-            if count == 0:
-                await fetch_and_store_tle(db, url=CELESTRAK_STATIONS_URL)
-        except httpx.HTTPError as e:
-            raise HTTPException(
-                status_code=503,
-                detail="TLE data source unavailable. Try again later.",
-            ) from e
-        rows = await get_latest_tle_snapshots(db)
+        raise HTTPException(
+            status_code=503,
+            detail="Satellite data is not yet available. Try again shortly.",
+        )
 
     now = datetime.now(timezone.utc)
     result = []
