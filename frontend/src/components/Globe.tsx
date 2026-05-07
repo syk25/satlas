@@ -1,17 +1,24 @@
 import {
   Color,
   ColorMaterialProperty,
+  EllipsoidTerrainProvider,
   GeoJsonDataSource,
-  Ion,
+  ImageryLayer,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
+  UrlTemplateImageryProvider,
   Viewer,
   defined,
 } from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import { useEffect, useRef } from 'react'
 
-Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_ION_TOKEN ?? ''
+const OSM_LAYER = new ImageryLayer(
+  new UrlTemplateImageryProvider({
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    credit: '© OpenStreetMap contributors',
+  })
+)
 
 const DEFAULT_FILL = new ColorMaterialProperty(
   Color.fromCssColorString('#1e3a5f').withAlpha(0.35)
@@ -38,6 +45,9 @@ export function Globe({ onCountrySelect, selectedCode }: Props) {
     if (!containerRef.current || viewerRef.current) return
 
     const viewer = new Viewer(containerRef.current, {
+      // Use OSM imagery — no Cesium ion token required
+      baseLayer: OSM_LAYER,
+      terrainProvider: new EllipsoidTerrainProvider(),
       geocoder: false,
       homeButton: false,
       sceneModePicker: false,
@@ -54,8 +64,11 @@ export function Globe({ onCountrySelect, selectedCode }: Props) {
       stroke: Color.WHITE.withAlpha(0.25),
       fill: Color.fromCssColorString('#1e3a5f').withAlpha(0.35),
       strokeWidth: 1,
-      clampToGround: true,
-    }).then((ds) => viewer.dataSources.add(ds))
+    }).then((ds) => {
+      // Guard against viewer being destroyed before promise resolves (React StrictMode)
+      if (viewer.isDestroyed()) return
+      viewer.dataSources.add(ds)
+    })
 
     const handler = new ScreenSpaceEventHandler(viewer.scene.canvas)
 
@@ -102,7 +115,6 @@ export function Globe({ onCountrySelect, selectedCode }: Props) {
     }
   }, [onCountrySelect])
 
-  // Reset highlight when selected country cleared externally
   useEffect(() => {
     if (!selectedCode && selectedRef.current) {
       selectedRef.current.polygon.material = DEFAULT_FILL
