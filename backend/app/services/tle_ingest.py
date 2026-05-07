@@ -96,15 +96,28 @@ async def _fetch_raw(
         try:
             resp = await client.get(url)
             if resp.status_code == 429:
+                logger.warning(
+                    "rate-limited on %s (attempt %d), retrying", group, attempt
+                )
                 await asyncio.sleep(30 * (attempt + 1))
                 continue
             body = resp.text
             if "GP data has not updated" in body:
                 return []
             if resp.status_code not in (200, 403):
+                logger.warning("%s: unexpected status %d", group, resp.status_code)
                 return []
-            return _parse_tle_blocks(body)
-        except (httpx.HTTPError, OSError):
+            blocks = _parse_tle_blocks(body)
+            if not blocks:
+                logger.warning(
+                    "%s: status=%d but no TLE parsed. body[:200]=%r",
+                    group,
+                    resp.status_code,
+                    body[:200],
+                )
+            return blocks
+        except (httpx.HTTPError, OSError) as exc:
+            logger.warning("%s: request error (attempt %d): %s", group, attempt, exc)
             if attempt < 2:
                 await asyncio.sleep(5)
     return []
