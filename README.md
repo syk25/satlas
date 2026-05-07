@@ -42,14 +42,27 @@ Previously, answering this question required checking each satellite's orbit ind
 
 ---
 
+## Data Sources
+
+| Source | Purpose | License |
+|---|---|---|
+| [CelesTrak](https://celestrak.org) | TLE orbital elements for active satellites (fetched twice daily) | Free public service, no API key required |
+| [Natural Earth](https://www.naturalearthdata.com) | Country boundary polygons for satellite-over-territory intersection | Public Domain |
+
+Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE source and may be integrated in a future phase. Registration is free but required.
+
+---
+
 ## Roadmap
 
-- [x] Project design and documentation
-- [ ] Backend scaffold (FastAPI + PostgreSQL + Docker Compose)
+- [x] Project design and architecture documentation (ADR-001 – ADR-011)
+- [x] Backend scaffold (FastAPI · PostgreSQL · Redis · Docker Compose)
+- [x] Database schema (SQLAlchemy ORM + Alembic migrations)
+- [x] CI/CD pipeline (GitHub Actions, path-based triggers)
 - [ ] TLE ingestion pipeline (CelesTrak + APScheduler)
 - [ ] SGP4-based position calculation and country boundary intersection
-- [ ] REST API MVP
-- [ ] Redis caching and real-time pub/sub
+- [ ] REST API MVP endpoints
+- [ ] Redis caching
 - [ ] Celery async task queue
 - [ ] Frontend (CesiumJS globe + country selection)
 - [ ] Deployment (Fly.io + Vercel)
