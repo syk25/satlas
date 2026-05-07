@@ -4,10 +4,11 @@
     "tagline": "Satellite pass tracking by national territory"
   },
   "panel": {
-    "placeholder": "Click on a country to see overhead satellites",
+    "placeholder": "Select a territory to see overhead satellites",
     "loading": "Loading...",
     "error": "Failed to load satellite data",
     "noSatellites": "No satellites currently overhead",
+    "all": "All",
     "count_one": "{{count}} satellite overhead",
     "count_other": "{{count}} satellites overhead",
     "updatedAt": "As of {{time}} UTC"
@@ -15,6 +16,11 @@
   "satellite": {
     "norad": "NORAD {{id}}",
     "unknownOperator": "Unknown"
+  },
+  "dropdown": {
+    "placeholder": "Select territory",
+    "search": "Search...",
+    "noResults": "No results"
   },
   "language": {
     "en": "EN",

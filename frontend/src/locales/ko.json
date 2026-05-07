@@ -4,10 +4,11 @@
     "tagline": "국가 영토 기준 위성 통과 추적"
   },
   "panel": {
-    "placeholder": "국가를 클릭하면 상공의 위성을 볼 수 있습니다",
+    "placeholder": "영토를 선택하면 상공의 위성을 볼 수 있습니다",
     "loading": "불러오는 중...",
     "error": "위성 데이터를 불러오지 못했습니다",
     "noSatellites": "현재 상공을 통과 중인 위성이 없습니다",
+    "all": "전체",
     "count_one": "위성 {{count}}개 통과 중",
     "count_other": "위성 {{count}}개 통과 중",
     "updatedAt": "{{time}} UTC 기준"
@@ -15,6 +16,11 @@
   "satellite": {
     "norad": "NORAD {{id}}",
     "unknownOperator": "미상"
+  },
+  "dropdown": {
+    "placeholder": "영토 선택",
+    "search": "검색...",
+    "noResults": "결과 없음"
   },
   "language": {
     "en": "EN",

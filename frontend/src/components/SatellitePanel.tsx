@@ -1,11 +1,23 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { SatelliteOverhead } from '../types'
+import { CATEGORY_COLOR } from '../types'
+import type { SatelliteCategory, SatelliteOverhead } from '../types'
 
 interface Props {
   countryName: string | null
   data: SatelliteOverhead[] | null
   loading: boolean
   error: boolean
+}
+
+function CategoryBadge({ category }: { category: SatelliteCategory | null }) {
+  if (!category || category === 'OTHER') return null
+  const color = CATEGORY_COLOR[category]
+  return (
+    <span className="sat-category-badge" style={{ color, borderColor: `${color}55` }}>
+      {category.replace('_', ' ')}
+    </span>
+  )
 }
 
 function SatelliteItem({ sat }: { sat: SatelliteOverhead }) {
@@ -15,11 +27,12 @@ function SatelliteItem({ sat }: { sat: SatelliteOverhead }) {
       <div className="sat-name">{sat.name}</div>
       <div className="sat-meta">
         <span>{t('satellite.norad', { id: sat.norad_id })}</span>
+        {sat.orbit_class && <span className="sat-orbit-inline">{sat.orbit_class}</span>}
         {sat.operator_country && (
           <span className="sat-country">{sat.operator_country}</span>
         )}
       </div>
-      {sat.orbit_class && <div className="sat-orbit">{sat.orbit_class}</div>}
+      <CategoryBadge category={sat.category} />
     </div>
   )
 }
@@ -34,8 +47,30 @@ function LangToggle() {
   )
 }
 
+const ALL_CATEGORIES: SatelliteCategory[] = [
+  'STATION',
+  'WEATHER',
+  'GNSS',
+  'MILITARY',
+  'AMATEUR',
+  'COMMERCIAL',
+  'EARTH_OBS',
+  'SCIENTIFIC',
+  'OTHER',
+]
+
 export function SatellitePanel({ countryName, data, loading, error }: Props) {
   const { t } = useTranslation()
+  const [activeCategory, setActiveCategory] = useState<SatelliteCategory | null>(null)
+
+  const filtered = activeCategory
+    ? (data ?? []).filter((s) => s.category === activeCategory)
+    : (data ?? [])
+
+  // Only show category tabs that actually have satellites
+  const presentCategories = ALL_CATEGORIES.filter((c) =>
+    (data ?? []).some((s) => s.category === c)
+  )
 
   const renderBody = () => {
     if (!countryName) {
@@ -50,11 +85,43 @@ export function SatellitePanel({ countryName, data, loading, error }: Props) {
     if (!data || data.length === 0) {
       return <p className="panel-status">{t('panel.noSatellites')}</p>
     }
+
     return (
       <>
-        <p className="panel-count">{t('panel.count_other', { count: data.length })}</p>
+        {/* Category filter tabs */}
+        {presentCategories.length > 1 && (
+          <div className="category-tabs">
+            <button
+              className={`category-tab${activeCategory === null ? ' active' : ''}`}
+              onClick={() => setActiveCategory(null)}
+            >
+              {t('panel.all')} ({data.length})
+            </button>
+            {presentCategories.map((c) => {
+              const count = data.filter((s) => s.category === c).length
+              return (
+                <button
+                  key={c}
+                  className={`category-tab${activeCategory === c ? ' active' : ''}`}
+                  style={
+                    activeCategory === c
+                      ? { color: CATEGORY_COLOR[c], borderColor: CATEGORY_COLOR[c] }
+                      : {}
+                  }
+                  onClick={() => setActiveCategory((prev) => (prev === c ? null : c))}
+                >
+                  {c.replace('_', ' ')} {count}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <p className="panel-count">
+          {t('panel.count_other', { count: filtered.length })}
+        </p>
         <div className="satellite-list">
-          {data.map((sat) => (
+          {filtered.map((sat) => (
             <SatelliteItem key={sat.norad_id} sat={sat} />
           ))}
         </div>
