@@ -16,5 +16,13 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": str(_env_file)}
 
+    @property
+    def async_database_url(self) -> str:
+        # Fly injects postgres:// with ?sslmode=disable; asyncpg needs postgresql+asyncpg://
+        url = self.database_url.replace(
+            "postgres://", "postgresql+asyncpg://", 1
+        ).replace("postgresql://", "postgresql+asyncpg://", 1)
+        return url.replace("?sslmode=disable", "").replace("&sslmode=disable", "")
+
 
 settings = Settings()

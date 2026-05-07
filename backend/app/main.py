@@ -1,9 +1,13 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import func, select
 
 from app.config import settings
+from app.database import AsyncSessionLocal
+from app.models.satellite import Satellite
 from app.routers import satellites
 from app.services.boundaries import load_country_polygons
 from app.services.cache import close_redis, init_redis
@@ -14,7 +18,11 @@ from app.services.scheduler import refresh_tle_job, start_scheduler, stop_schedu
 async def lifespan(app: FastAPI):
     load_country_polygons()
     await init_redis()
-    await refresh_tle_job()
+    # Background seeding if DB is sparse — does not block startup or health check
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(func.count()).select_from(Satellite))
+        if result.scalar() < 5000:
+            asyncio.create_task(refresh_tle_job())
     start_scheduler()
     yield
     stop_scheduler()

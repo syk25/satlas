@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.satellite import OrbitClass, Satellite, SatelliteCategory, TleSnapshot
@@ -120,37 +121,41 @@ async def refresh_tle(db: AsyncSession) -> int:
 
             for name, line1, line2 in blocks:
                 norad_id = int(line2[2:7])
+                orbit_class = orbit_class_from_tle(line2)
 
-                result = await db.execute(
-                    select(Satellite).where(Satellite.norad_id == norad_id)
+                # UPSERT: never downgrade a specific category to OTHER
+                stmt = pg_insert(Satellite).values(
+                    norad_id=norad_id,
+                    name=name,
+                    is_active=True,
+                    category=category,
+                    orbit_class=orbit_class,
                 )
-                satellite = result.scalar_one_or_none()
-
-                if satellite is None:
-                    satellite = Satellite(
-                        norad_id=norad_id,
-                        name=name,
-                        is_active=True,
-                        category=category,
-                        orbit_class=orbit_class_from_tle(line2),
+                if category == SatelliteCategory.OTHER:
+                    # OTHER is catch-all — don't overwrite a more specific category
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=["norad_id"],
+                        set_={
+                            "name": stmt.excluded.name,
+                            "orbit_class": stmt.excluded.orbit_class,
+                        },
                     )
-                    db.add(satellite)
                 else:
-                    # Never downgrade a specific category to OTHER
-                    if satellite.category is None or (
-                        satellite.category == SatelliteCategory.OTHER
-                        and category != SatelliteCategory.OTHER
-                    ):
-                        satellite.category = category
-                    if satellite.orbit_class is None:
-                        satellite.orbit_class = orbit_class_from_tle(line2)
-
-                await db.flush()
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=["norad_id"],
+                        set_={
+                            "name": stmt.excluded.name,
+                            "category": stmt.excluded.category,
+                            "orbit_class": stmt.excluded.orbit_class,
+                        },
+                    )
+                result = await db.execute(stmt.returning(Satellite.id))
+                satellite_id = result.scalar_one()
 
                 epoch = _parse_epoch(line1)
                 db.add(
                     TleSnapshot(
-                        satellite_id=satellite.id,
+                        satellite_id=satellite_id,
                         line1=line1,
                         line2=line2,
                         epoch=epoch,

@@ -24,7 +24,11 @@ def do_run_migrations(connection):
 
 
 async def run_async_migrations():
-    engine = create_async_engine(settings.database_url)
+    url = settings.async_database_url
+    connect_args = (
+        {"ssl": False} if any(h in url for h in ("flycast", ".internal")) else {}
+    )
+    engine = create_async_engine(url, connect_args=connect_args)
     async with engine.begin() as conn:
         await conn.run_sync(do_run_migrations)
     await engine.dispose()
