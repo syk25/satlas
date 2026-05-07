@@ -25,6 +25,10 @@
     "trackingHint": "풋프린트와 95분 예측 궤도를 표시합니다.",
     "stopTracking": "추적 중지",
     "back": "뒤로",
+    "latitude": "위도",
+    "longitude": "경도",
+    "altitude": "고도",
+    "speed": "속도",
     "offMap": {
       "north": "위성이 북극 상공에 있습니다 — 지도 표시 범위(위도 85°) 초과.",
       "south": "위성이 남극 상공에 있습니다 — 지도 표시 범위(위도 85°) 초과."

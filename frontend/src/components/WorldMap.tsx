@@ -196,6 +196,7 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
   const groundTrackRef = useRef<Array<[number, number]>>([])
   const trackTrailRef = useRef<Array<[number, number]>>([])
   const trackFrameRef = useRef(0)
+  const trackingJustStoppedRef = useRef(false)
 
   useImperativeHandle(ref, () => ({
     flyTo(lat, lon, zoom) {
@@ -258,6 +259,7 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
   // Tracking mode setup / teardown
   useEffect(() => {
     if (!trackedSatellite) {
+      trackingJustStoppedRef.current = true
       trackedSatRef.current = null
       trackedSatrecRef.current = null
       groundTrackRef.current = []
@@ -346,6 +348,8 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
       maxZoom: 20,
     }).addTo(map)
 
+    L.control.scale({ position: 'bottomright', imperial: false }).addTo(map)
+
     map.on('movestart zoomstart', () => {
       trailsRef.current.clear()
       trackTrailRef.current = []
@@ -413,6 +417,27 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
         const ctx = canvas.getContext('2d')
         if (ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+          // Boundary lines at ±180° longitude (edge of interactive area)
+          const xLeft = map.latLngToContainerPoint([0, -180]).x
+          const xRight = map.latLngToContainerPoint([0, 180]).x
+          ctx.save()
+          ctx.strokeStyle = 'rgba(255,255,255,0.18)'
+          ctx.lineWidth = 1
+          ctx.setLineDash([6, 6])
+          if (xLeft > 0 && xLeft < canvas.width) {
+            ctx.beginPath()
+            ctx.moveTo(xLeft, 0)
+            ctx.lineTo(xLeft, canvas.height)
+            ctx.stroke()
+          }
+          if (xRight > 0 && xRight < canvas.width) {
+            ctx.beginPath()
+            ctx.moveTo(xRight, 0)
+            ctx.lineTo(xRight, canvas.height)
+            ctx.stroke()
+          }
+          ctx.restore()
 
           const tracked = trackedSatRef.current
           const trackedSatrec = trackedSatrecRef.current
@@ -679,10 +704,13 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
       if (code === selectedCode) {
         ;(lyr as L.Path).setStyle(COUNTRY_FOCUSED)
         selectedLayerRef.current = lyr
-        mapRef.current?.fitBounds((lyr as L.GeoJSON).getBounds(), {
-          padding: [60, 60],
-          maxZoom: 6,
-        })
+        if (!trackingJustStoppedRef.current) {
+          mapRef.current?.fitBounds((lyr as L.GeoJSON).getBounds(), {
+            padding: [60, 60],
+            maxZoom: 6,
+          })
+        }
+        trackingJustStoppedRef.current = false
       } else {
         ;(lyr as L.Path).setStyle(COUNTRY_DIMMED)
       }

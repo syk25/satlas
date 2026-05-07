@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 from datetime import datetime, timezone
 
@@ -91,16 +92,25 @@ async def _fetch_raw(
     client: httpx.AsyncClient, group: str
 ) -> list[tuple[str, str, str]]:
     url = BASE_URL.format(group=group)
-    try:
-        resp = await client.get(url)
-        body = resp.text
-        if "GP data has not updated" in body:
-            return []
-        if resp.status_code not in (200, 403):
-            return []
-        return _parse_tle_blocks(body)
-    except (httpx.HTTPError, OSError):
-        return []
+    for attempt in range(3):
+        try:
+            resp = await client.get(url)
+            if resp.status_code == 429:
+                await asyncio.sleep(30 * (attempt + 1))
+                continue
+            body = resp.text
+            if "GP data has not updated" in body:
+                return []
+            if resp.status_code not in (200, 403):
+                return []
+            return _parse_tle_blocks(body)
+        except (httpx.HTTPError, OSError):
+            if attempt < 2:
+                await asyncio.sleep(5)
+    return []
+
+
+logger = logging.getLogger(__name__)
 
 
 async def refresh_tle(db: AsyncSession) -> int:
@@ -112,12 +122,24 @@ async def refresh_tle(db: AsyncSession) -> int:
     """
     now = datetime.now(timezone.utc)
     total = 0
+    feed_count = len(CATEGORY_FEEDS)
 
     async with httpx.AsyncClient(timeout=30, headers=_HEADERS, http2=False) as client:
-        for group, category in CATEGORY_FEEDS:
+        for idx, (group, category) in enumerate(CATEGORY_FEEDS, 1):
+            logger.info("[%d/%d] fetching feed: %s", idx, feed_count, group)
             blocks = await _fetch_raw(client, group)
             if not blocks:
+                logger.warning(
+                    "[%d/%d] feed empty or failed: %s", idx, feed_count, group
+                )
                 continue
+            logger.info(
+                "[%d/%d] %s: %d TLE blocks received",
+                idx,
+                feed_count,
+                group,
+                len(blocks),
+            )
 
             for name, line1, line2 in blocks:
                 norad_id = int(line2[2:7])
@@ -165,9 +187,12 @@ async def refresh_tle(db: AsyncSession) -> int:
                 total += 1
 
             await db.commit()
+            logger.info(
+                "[%d/%d] %s: committed, running total=%d", idx, feed_count, group, total
+            )
 
-            # Polite delay between CelesTrak requests
-            await asyncio.sleep(0.5)
+            # Polite delay — datacenter IPs are rate-limited more aggressively
+            await asyncio.sleep(5)
 
     return total
 

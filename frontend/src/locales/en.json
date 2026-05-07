@@ -25,6 +25,10 @@
     "trackingHint": "Showing footprint and 95-min ground track.",
     "stopTracking": "Stop tracking",
     "back": "Back",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "altitude": "Altitude",
+    "speed": "Speed",
     "offMap": {
       "north": "Satellite is over the North Pole — beyond the map's display range (>85°N).",
       "south": "Satellite is over the South Pole — beyond the map's display range (>85°S)."

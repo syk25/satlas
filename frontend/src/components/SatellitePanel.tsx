@@ -1,6 +1,53 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import {
+  degreesLat,
+  degreesLong,
+  eciToGeodetic,
+  gstime,
+  propagate,
+  twoline2satrec,
+} from 'satellite.js'
 import { CATEGORY_COLOR } from '../types'
 import type { SatelliteCategory, SatelliteOverhead } from '../types'
+
+interface SatPosition {
+  lat: number
+  lon: number
+  alt: number
+  speed: number
+}
+
+function useSatPosition(sat: SatelliteOverhead | null): SatPosition | null {
+  const [pos, setPos] = useState<SatPosition | null>(null)
+  useEffect(() => {
+    if (!sat) {
+      setPos(null)
+      return
+    }
+    const compute = () => {
+      try {
+        const satrec = twoline2satrec(sat.line1.trim(), sat.line2.trim())
+        const now = new Date()
+        const pv = propagate(satrec, now)
+        if (!pv.position || typeof pv.position === 'boolean') return
+        if (!pv.velocity || typeof pv.velocity === 'boolean') return
+        const geo = eciToGeodetic(pv.position as any, gstime(now))
+        const v = pv.velocity as { x: number; y: number; z: number }
+        setPos({
+          lat: degreesLat(geo.latitude),
+          lon: degreesLong(geo.longitude),
+          alt: geo.height,
+          speed: Math.sqrt(v.x ** 2 + v.y ** 2 + v.z ** 2),
+        })
+      } catch {}
+    }
+    compute()
+    const id = setInterval(compute, 2000)
+    return () => clearInterval(id)
+  }, [sat])
+  return pos
+}
 
 interface Props {
   countryName: string | null
@@ -38,6 +85,7 @@ function SatelliteDetail({
 }) {
   const { t } = useTranslation()
   const color = sat.category ? CATEGORY_COLOR[sat.category] : '#facc15'
+  const pos = useSatPosition(sat)
 
   return (
     <div className="sat-detail">
@@ -81,6 +129,26 @@ function SatelliteDetail({
           </div>
         )}
       </div>
+      {pos && (
+        <div className="sat-detail-body">
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.latitude')}</span>
+            <span className="sat-detail-value">{pos.lat.toFixed(2)}°</span>
+          </div>
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.longitude')}</span>
+            <span className="sat-detail-value">{pos.lon.toFixed(2)}°</span>
+          </div>
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.altitude')}</span>
+            <span className="sat-detail-value">{pos.alt.toFixed(0)} km</span>
+          </div>
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.speed')}</span>
+            <span className="sat-detail-value">{pos.speed.toFixed(2)} km/s</span>
+          </div>
+        </div>
+      )}
       <button
         className="track-btn"
         style={{ borderColor: color, color }}
@@ -103,6 +171,7 @@ function TrackingView({
 }) {
   const { t } = useTranslation()
   const color = sat.category ? CATEGORY_COLOR[sat.category] : '#facc15'
+  const pos = useSatPosition(sat)
 
   return (
     <div className="sat-detail">
@@ -137,6 +206,26 @@ function TrackingView({
           <p className="sat-detail-hint">{t('satellite.trackingHint')}</p>
         )}
       </div>
+      {pos && (
+        <div className="sat-detail-body">
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.latitude')}</span>
+            <span className="sat-detail-value">{pos.lat.toFixed(2)}°</span>
+          </div>
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.longitude')}</span>
+            <span className="sat-detail-value">{pos.lon.toFixed(2)}°</span>
+          </div>
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.altitude')}</span>
+            <span className="sat-detail-value">{pos.alt.toFixed(0)} km</span>
+          </div>
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.speed')}</span>
+            <span className="sat-detail-value">{pos.speed.toFixed(2)} km/s</span>
+          </div>
+        </div>
+      )}
       <button className="track-stop-btn" onClick={onStop}>
         ✕ {t('satellite.stopTracking')}
       </button>
