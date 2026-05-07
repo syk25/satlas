@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
-import { Globe } from './components/Globe'
 import { SatellitePanel } from './components/SatellitePanel'
+import { WorldMap } from './components/WorldMap'
 import { useOverheadSatellites } from './hooks/useOverheadSatellites'
 
 export default function App() {
@@ -15,7 +15,7 @@ export default function App() {
   return (
     <div className="layout">
       <div className="globe-container">
-        <Globe
+        <WorldMap
           onCountrySelect={handleCountrySelect}
           selectedCode={selected?.code ?? null}
           satellites={data ?? []}
