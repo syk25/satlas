@@ -3,7 +3,6 @@ import logging
 import math
 from datetime import datetime, timezone
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,36 +90,42 @@ def orbit_class_from_tle(line2: str) -> OrbitClass:
 logger = logging.getLogger(__name__)
 
 
-async def _fetch_raw(
-    client: httpx.AsyncClient, group: str
-) -> list[tuple[str, str, str]]:
+def _fetch_raw_sync(url: str) -> tuple[int, str]:
+    """Synchronous fetch; runs in a thread via asyncio.to_thread."""
+    import urllib.request
+
+    req = urllib.request.Request(url, headers=_HEADERS)
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return resp.status, resp.read().decode("utf-8", errors="replace")
+
+
+async def _fetch_raw(group: str) -> list[tuple[str, str, str]]:
     url = BASE_URL.format(group=group)
     for attempt in range(3):
         try:
-            resp = await client.get(url)
-            if resp.status_code == 429:
-                logger.warning(
-                    "rate-limited on %s (attempt %d), retrying", group, attempt
-                )
-                await asyncio.sleep(30 * (attempt + 1))
-                continue
-            body = resp.text
+            status, body = await asyncio.to_thread(_fetch_raw_sync, url)
             if "GP data has not updated" in body:
                 return []
-            if resp.status_code not in (200, 403):
-                logger.warning("%s: unexpected status %d", group, resp.status_code)
+            if status not in (200, 403):
+                logger.warning("%s: unexpected status %d", group, status)
                 return []
             blocks = _parse_tle_blocks(body)
             if not blocks:
                 logger.warning(
                     "%s: status=%d but no TLE parsed. body[:200]=%r",
                     group,
-                    resp.status_code,
+                    status,
                     body[:200],
                 )
             return blocks
-        except (httpx.HTTPError, OSError) as exc:
-            logger.warning("%s: request error (attempt %d): %s", group, attempt, exc)
+        except OSError as exc:
+            logger.warning(
+                "%s: request error (attempt %d): %s: %s",
+                group,
+                attempt,
+                type(exc).__name__,
+                exc,
+            )
             if attempt < 2:
                 await asyncio.sleep(5)
     return []
@@ -137,78 +142,72 @@ async def refresh_tle(db: AsyncSession) -> int:
     total = 0
     feed_count = len(CATEGORY_FEEDS)
 
-    timeout = httpx.Timeout(connect=15, read=120, write=15, pool=15)
-    async with httpx.AsyncClient(
-        timeout=timeout, headers=_HEADERS, http2=False
-    ) as client:
-        for idx, (group, category) in enumerate(CATEGORY_FEEDS, 1):
-            logger.info("[%d/%d] fetching feed: %s", idx, feed_count, group)
-            blocks = await _fetch_raw(client, group)
-            if not blocks:
-                logger.warning(
-                    "[%d/%d] feed empty or failed: %s", idx, feed_count, group
-                )
-                continue
-            logger.info(
-                "[%d/%d] %s: %d TLE blocks received",
-                idx,
-                feed_count,
-                group,
-                len(blocks),
+    for idx, (group, category) in enumerate(CATEGORY_FEEDS, 1):
+        logger.info("[%d/%d] fetching feed: %s", idx, feed_count, group)
+        blocks = await _fetch_raw(group)
+        if not blocks:
+            logger.warning("[%d/%d] feed empty or failed: %s", idx, feed_count, group)
+            continue
+        logger.info(
+            "[%d/%d] %s: %d TLE blocks received",
+            idx,
+            feed_count,
+            group,
+            len(blocks),
+        )
+
+        for name, line1, line2 in blocks:
+            norad_id = int(line2[2:7])
+            orbit_class = orbit_class_from_tle(line2)
+
+            # UPSERT: never downgrade a specific category to OTHER
+            stmt = pg_insert(Satellite).values(
+                norad_id=norad_id,
+                name=name,
+                is_active=True,
+                category=category,
+                orbit_class=orbit_class,
             )
-
-            for name, line1, line2 in blocks:
-                norad_id = int(line2[2:7])
-                orbit_class = orbit_class_from_tle(line2)
-
-                # UPSERT: never downgrade a specific category to OTHER
-                stmt = pg_insert(Satellite).values(
-                    norad_id=norad_id,
-                    name=name,
-                    is_active=True,
-                    category=category,
-                    orbit_class=orbit_class,
+            if category == SatelliteCategory.OTHER:
+                # OTHER is catch-all — don't overwrite a more specific category
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["norad_id"],
+                    set_={
+                        "name": stmt.excluded.name,
+                        "orbit_class": stmt.excluded.orbit_class,
+                    },
                 )
-                if category == SatelliteCategory.OTHER:
-                    # OTHER is catch-all — don't overwrite a more specific category
-                    stmt = stmt.on_conflict_do_update(
-                        index_elements=["norad_id"],
-                        set_={
-                            "name": stmt.excluded.name,
-                            "orbit_class": stmt.excluded.orbit_class,
-                        },
-                    )
-                else:
-                    stmt = stmt.on_conflict_do_update(
-                        index_elements=["norad_id"],
-                        set_={
-                            "name": stmt.excluded.name,
-                            "category": stmt.excluded.category,
-                            "orbit_class": stmt.excluded.orbit_class,
-                        },
-                    )
-                result = await db.execute(stmt.returning(Satellite.id))
-                satellite_id = result.scalar_one()
-
-                epoch = _parse_epoch(line1)
-                db.add(
-                    TleSnapshot(
-                        satellite_id=satellite_id,
-                        line1=line1,
-                        line2=line2,
-                        epoch=epoch,
-                        ingested_at=now,
-                    )
+            else:
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["norad_id"],
+                    set_={
+                        "name": stmt.excluded.name,
+                        "category": stmt.excluded.category,
+                        "orbit_class": stmt.excluded.orbit_class,
+                    },
                 )
-                total += 1
+            result = await db.execute(stmt.returning(Satellite.id))
+            satellite_id = result.scalar_one()
 
-            await db.commit()
-            logger.info(
-                "[%d/%d] %s: committed, running total=%d", idx, feed_count, group, total
+            epoch = _parse_epoch(line1)
+            db.add(
+                TleSnapshot(
+                    satellite_id=satellite_id,
+                    line1=line1,
+                    line2=line2,
+                    epoch=epoch,
+                    ingested_at=now,
+                )
             )
+            total += 1
 
-            # Polite delay — datacenter IPs are rate-limited more aggressively
-            await asyncio.sleep(5)
+        await db.commit()
+        logger.info(
+            "[%d/%d] %s: committed, running total=%d", idx, feed_count, group, total
+        )
+
+        # Polite delay — datacenter IPs are rate-limited more aggressively
+        await asyncio.sleep(5)
 
     return total
 
