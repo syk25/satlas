@@ -88,6 +88,9 @@ def orbit_class_from_tle(line2: str) -> OrbitClass:
         return OrbitClass.LEO
 
 
+logger = logging.getLogger(__name__)
+
+
 async def _fetch_raw(
     client: httpx.AsyncClient, group: str
 ) -> list[tuple[str, str, str]]:
@@ -121,9 +124,6 @@ async def _fetch_raw(
             if attempt < 2:
                 await asyncio.sleep(5)
     return []
-
-
-logger = logging.getLogger(__name__)
 
 
 async def refresh_tle(db: AsyncSession) -> int:
