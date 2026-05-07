@@ -62,7 +62,7 @@ Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE 
 - [x] TLE ingestion pipeline (CelesTrak on-demand)
 - [x] SGP4-based position calculation and country boundary intersection
 - [x] `GET /satellites/overhead/{country_code}` — first MVP endpoint
-- [ ] Redis caching
+- [x] Redis caching (60 s TTL per country, graceful degradation)
 - [ ] Celery async task queue
 - [ ] Frontend (CesiumJS globe + country selection)
 - [ ] Deployment (Fly.io + Vercel)

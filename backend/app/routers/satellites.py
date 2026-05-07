@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -7,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.services import boundaries
+from app.services import boundaries, cache
 from app.services.position import get_position
 from app.services.tle_ingest import (
     CELESTRAK_STATIONS_URL,
@@ -19,6 +20,8 @@ from app.services.tle_ingest import (
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 router = APIRouter(prefix="/satellites", tags=["satellites"])
+
+OVERHEAD_CACHE_TTL = 60  # seconds
 
 
 class SatelliteOverhead(BaseModel):
@@ -42,6 +45,11 @@ async def get_overhead(
 
     if not boundaries.country_exists(cc):
         raise HTTPException(status_code=404, detail=f"Country '{cc}' not found.")
+
+    cache_key = f"satlas:overhead:{cc}"
+    cached = await cache.cache_get(cache_key)
+    if cached is not None:
+        return [SatelliteOverhead(**item) for item in json.loads(cached)]
 
     rows = await get_latest_tle_snapshots(db)
 
@@ -87,5 +95,11 @@ async def get_overhead(
                     entry_time=now,
                 )
             )
+
+    await cache.cache_set(
+        cache_key,
+        json.dumps([item.model_dump(mode="json") for item in result]),
+        ttl=OVERHEAD_CACHE_TTL,
+    )
 
     return result
