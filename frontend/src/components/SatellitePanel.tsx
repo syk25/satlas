@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next'
-import { useOverheadSatellites } from '../hooks/useOverheadSatellites'
 import type { SatelliteOverhead } from '../types'
 
 interface Props {
-  countryCode: string | null
   countryName: string | null
+  data: SatelliteOverhead[] | null
+  loading: boolean
+  error: boolean
 }
 
 function SatelliteItem({ sat }: { sat: SatelliteOverhead }) {
@@ -33,12 +34,11 @@ function LangToggle() {
   )
 }
 
-export function SatellitePanel({ countryCode, countryName }: Props) {
+export function SatellitePanel({ countryName, data, loading, error }: Props) {
   const { t } = useTranslation()
-  const { data, loading, error } = useOverheadSatellites(countryCode)
 
   const renderBody = () => {
-    if (!countryCode) {
+    if (!countryName) {
       return <p className="panel-placeholder">{t('panel.placeholder')}</p>
     }
     if (loading) {

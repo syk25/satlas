@@ -17,6 +17,8 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-i18next": "^17.0.7",
+    "react-router-dom": "^7.15.0",
+    "satellite.js": "^7.0.0",
     "vite-plugin-cesium": "^1.2.23"
   },
   "devDependencies": {

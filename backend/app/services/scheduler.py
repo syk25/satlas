@@ -10,6 +10,7 @@ from app.services.tle_ingest import (
     CELESTRAK_STATIONS_URL,
     CELESTRAK_URL,
     fetch_and_store_tle,
+    get_latest_tle_snapshots,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,7 +24,11 @@ async def refresh_tle() -> None:
         try:
             count = await fetch_and_store_tle(db, url=CELESTRAK_URL)
             if count == 0:
-                count = await fetch_and_store_tle(db, url=CELESTRAK_STATIONS_URL)
+                # Only fall back to stations when DB is empty (cold start).
+                # If DB already has data, the active group simply hasn't updated yet.
+                existing = await get_latest_tle_snapshots(db)
+                if not existing:
+                    count = await fetch_and_store_tle(db, url=CELESTRAK_STATIONS_URL)
         except httpx.HTTPError:
             logger.error("TLE refresh failed: CelesTrak unavailable")
             return

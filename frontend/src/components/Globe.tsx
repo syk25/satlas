@@ -1,4 +1,5 @@
 import {
+  Cartesian3,
   Color,
   ColorMaterialProperty,
   EllipsoidTerrainProvider,
@@ -11,7 +12,16 @@ import {
   defined,
 } from 'cesium'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
+import {
+  degreesLat,
+  degreesLong,
+  eciToGeodetic,
+  gstime,
+  propagate,
+  twoline2satrec,
+} from 'satellite.js'
 import { useEffect, useRef } from 'react'
+import type { SatelliteOverhead } from '../types'
 
 const OSM_LAYER = new ImageryLayer(
   new UrlTemplateImageryProvider({
@@ -20,32 +30,48 @@ const OSM_LAYER = new ImageryLayer(
   })
 )
 
-const DEFAULT_FILL = new ColorMaterialProperty(
-  Color.fromCssColorString('#1e3a5f').withAlpha(0.35)
-)
+const DEFAULT_FILL = new ColorMaterialProperty(Color.fromAlpha(Color.WHITE, 0.001))
 const HOVER_FILL = new ColorMaterialProperty(
-  Color.fromCssColorString('#2563eb').withAlpha(0.55)
+  Color.fromCssColorString('#3b82f6').withAlpha(0.35)
 )
 const SELECTED_FILL = new ColorMaterialProperty(
-  Color.fromCssColorString('#3b82f6').withAlpha(0.7)
+  Color.fromCssColorString('#3b82f6').withAlpha(0.6)
 )
 
 interface Props {
   onCountrySelect: (code: string, name: string) => void
   selectedCode: string | null
+  satellites: SatelliteOverhead[]
 }
 
-export function Globe({ onCountrySelect, selectedCode }: Props) {
+function getSatPosition(
+  line1: string,
+  line2: string,
+  now: Date
+): [number, number, number] | null {
+  try {
+    const satrec = twoline2satrec(line1, line2)
+    const pv = propagate(satrec, now)
+    if (!pv.position || typeof pv.position === 'boolean') return null
+    const gst = gstime(now)
+    const geo = eciToGeodetic(pv.position as any, gst)
+    return [degreesLat(geo.latitude), degreesLong(geo.longitude), geo.height]
+  } catch {
+    return null
+  }
+}
+
+export function Globe({ onCountrySelect, selectedCode, satellites }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const hoveredRef = useRef<any>(null)
   const selectedRef = useRef<any>(null)
+  const satEntitiesRef = useRef<any[]>([])
 
   useEffect(() => {
     if (!containerRef.current || viewerRef.current) return
 
     const viewer = new Viewer(containerRef.current, {
-      // Use OSM imagery — no Cesium ion token required
       baseLayer: OSM_LAYER,
       terrainProvider: new EllipsoidTerrainProvider(),
       geocoder: false,
@@ -57,15 +83,16 @@ export function Globe({ onCountrySelect, selectedCode }: Props) {
       timeline: false,
       fullscreenButton: false,
       vrButton: false,
+      infoBox: false,
+      selectionIndicator: false,
     })
     viewerRef.current = viewer
 
     GeoJsonDataSource.load('/countries.geojson', {
-      stroke: Color.WHITE.withAlpha(0.25),
-      fill: Color.fromCssColorString('#1e3a5f').withAlpha(0.35),
+      stroke: Color.WHITE.withAlpha(0.4),
+      fill: Color.fromAlpha(Color.WHITE, 0.001),
       strokeWidth: 1,
     }).then((ds) => {
-      // Guard against viewer being destroyed before promise resolves (React StrictMode)
       if (viewer.isDestroyed()) return
       viewer.dataSources.add(ds)
     })
@@ -105,6 +132,7 @@ export function Globe({ onCountrySelect, selectedCode }: Props) {
       selectedRef.current = entity
       hoveredRef.current = entity
 
+      viewer.flyTo(entity, { duration: 1.5 })
       onCountrySelect(code, name)
     }, ScreenSpaceEventType.LEFT_CLICK)
 
@@ -115,12 +143,59 @@ export function Globe({ onCountrySelect, selectedCode }: Props) {
     }
   }, [onCountrySelect])
 
+  // Reset highlight when country is deselected externally
   useEffect(() => {
     if (!selectedCode && selectedRef.current) {
       selectedRef.current.polygon.material = DEFAULT_FILL
       selectedRef.current = null
     }
   }, [selectedCode])
+
+  // Render and refresh satellite markers every 5 seconds
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) return
+
+    const clearMarkers = () => {
+      satEntitiesRef.current.forEach((e) => viewer.entities.remove(e))
+      satEntitiesRef.current = []
+    }
+
+    if (satellites.length === 0) {
+      clearMarkers()
+      return
+    }
+
+    const placeMarkers = () => {
+      if (viewer.isDestroyed()) return
+      clearMarkers()
+      const now = new Date()
+      satellites.forEach((sat) => {
+        const pos = getSatPosition(sat.line1, sat.line2, now)
+        if (!pos) return
+        const [lat, lon, altKm] = pos
+        const entity = viewer.entities.add({
+          position: Cartesian3.fromDegrees(lon, lat, altKm * 1000),
+          point: {
+            pixelSize: 7,
+            color: Color.YELLOW,
+            outlineColor: Color.BLACK,
+            outlineWidth: 1,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        })
+        satEntitiesRef.current.push(entity)
+      })
+    }
+
+    placeMarkers()
+    const interval = setInterval(placeMarkers, 5000)
+
+    return () => {
+      clearInterval(interval)
+      clearMarkers()
+    }
+  }, [satellites])
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 }
