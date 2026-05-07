@@ -1,6 +1,6 @@
 # Satlas backend — Fly.io configuration
 app = "satlas-api"
-primary_region = "nrt"  # Tokyo (closest to Korea)
+primary_region = "sjc"  # San Jose — CelesTrak blocks NRT IPs for large feeds (active group)
 
 [build]
   dockerfile = "backend/Dockerfile.prod"
