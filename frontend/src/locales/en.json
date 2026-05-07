@@ -24,12 +24,21 @@
     "tracking": "TRACKING",
     "trackingHint": "Showing footprint and 95-min ground track.",
     "stopTracking": "Stop tracking",
-    "back": "Back"
+    "back": "Back",
+    "offMap": {
+      "north": "Satellite is over the North Pole — beyond the map's display range (>85°N).",
+      "south": "Satellite is over the South Pole — beyond the map's display range (>85°S)."
+    }
   },
   "dropdown": {
     "placeholder": "Select territory",
     "search": "Search...",
     "noResults": "No results"
+  },
+  "nav": {
+    "world": "World",
+    "northPole": "North Pole",
+    "southPole": "South Pole"
   },
   "language": {
     "en": "EN",

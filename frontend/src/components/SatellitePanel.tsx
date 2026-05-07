@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { CATEGORY_COLOR } from '../types'
 import type { SatelliteCategory, SatelliteOverhead } from '../types'
@@ -9,8 +8,13 @@ interface Props {
   loading: boolean
   error: boolean
   trackedSatellite: SatelliteOverhead | null
+  selectedSat: SatelliteOverhead | null
+  activeCategory: SatelliteCategory | null
+  satOffMapDir: 'north' | 'south' | null
   onTrack: (sat: SatelliteOverhead) => void
   onStopTracking: () => void
+  onSelectSat: (sat: SatelliteOverhead | null) => void
+  onCategoryChange: (cat: SatelliteCategory | null) => void
 }
 
 function CategoryBadge({ category }: { category: SatelliteCategory | null }) {
@@ -88,7 +92,15 @@ function SatelliteDetail({
   )
 }
 
-function TrackingView({ sat, onStop }: { sat: SatelliteOverhead; onStop: () => void }) {
+function TrackingView({
+  sat,
+  offMapDir,
+  onStop,
+}: {
+  sat: SatelliteOverhead
+  offMapDir: 'north' | 'south' | null
+  onStop: () => void
+}) {
   const { t } = useTranslation()
   const color = sat.category ? CATEGORY_COLOR[sat.category] : '#facc15'
 
@@ -119,7 +131,11 @@ function TrackingView({ sat, onStop }: { sat: SatelliteOverhead; onStop: () => v
             <CategoryBadge category={sat.category} />
           </div>
         )}
-        <p className="sat-detail-hint">{t('satellite.trackingHint')}</p>
+        {offMapDir ? (
+          <p className="sat-offmap-warning">{t(`satellite.offMap.${offMapDir}`)}</p>
+        ) : (
+          <p className="sat-detail-hint">{t('satellite.trackingHint')}</p>
+        )}
       </div>
       <button className="track-stop-btn" onClick={onStop}>
         ✕ {t('satellite.stopTracking')}
@@ -151,16 +167,6 @@ function SatelliteItem({
   )
 }
 
-function LangToggle() {
-  const { i18n } = useTranslation()
-  const toggle = () => i18n.changeLanguage(i18n.language === 'ko' ? 'en' : 'ko')
-  return (
-    <button className="lang-toggle" onClick={toggle}>
-      {i18n.language === 'ko' ? 'EN' : 'KO'}
-    </button>
-  )
-}
-
 const ALL_CATEGORIES: SatelliteCategory[] = [
   'STATION',
   'WEATHER',
@@ -179,36 +185,56 @@ export function SatellitePanel({
   loading,
   error,
   trackedSatellite,
+  selectedSat,
+  activeCategory,
+  satOffMapDir,
   onTrack,
   onStopTracking,
+  onSelectSat,
+  onCategoryChange,
 }: Props) {
   const { t } = useTranslation()
-  const [activeCategory, setActiveCategory] = useState<SatelliteCategory | null>(null)
-  const [selectedSat, setSelectedSat] = useState<SatelliteOverhead | null>(null)
 
-  const filtered = activeCategory
-    ? (data ?? []).filter((s) => s.category === activeCategory)
-    : (data ?? [])
+  const categoryOrder = Object.fromEntries(ALL_CATEGORIES.map((c, i) => [c, i]))
+
+  const filtered = (
+    activeCategory
+      ? (data ?? []).filter((s) => s.category === activeCategory)
+      : (data ?? [])
+  )
+    .slice()
+    .sort((a, b) => {
+      const catA = a.category ? (categoryOrder[a.category] ?? 999) : 999
+      const catB = b.category ? (categoryOrder[b.category] ?? 999) : 999
+      if (catA !== catB) return catA - catB
+      return a.name.localeCompare(b.name)
+    })
 
   const presentCategories = ALL_CATEGORIES.filter((c) =>
     (data ?? []).some((s) => s.category === c)
   )
 
   const handleTrack = (sat: SatelliteOverhead) => {
-    setSelectedSat(null)
+    onSelectSat(null)
     onTrack(sat)
   }
 
   const renderBody = () => {
     if (trackedSatellite) {
-      return <TrackingView sat={trackedSatellite} onStop={onStopTracking} />
+      return (
+        <TrackingView
+          sat={trackedSatellite}
+          offMapDir={satOffMapDir}
+          onStop={onStopTracking}
+        />
+      )
     }
     if (selectedSat) {
       return (
         <SatelliteDetail
           sat={selectedSat}
           onTrack={handleTrack}
-          onBack={() => setSelectedSat(null)}
+          onBack={() => onSelectSat(null)}
         />
       )
     }
@@ -226,7 +252,7 @@ export function SatellitePanel({
           <div className="category-tabs">
             <button
               className={`category-tab${activeCategory === null ? ' active' : ''}`}
-              onClick={() => setActiveCategory(null)}
+              onClick={() => onCategoryChange(null)}
             >
               {t('panel.all')} ({data.length})
             </button>
@@ -241,7 +267,7 @@ export function SatellitePanel({
                       ? { color: CATEGORY_COLOR[c], borderColor: CATEGORY_COLOR[c] }
                       : {}
                   }
-                  onClick={() => setActiveCategory((prev) => (prev === c ? null : c))}
+                  onClick={() => onCategoryChange(activeCategory === c ? null : c)}
                 >
                   {c.replace('_', ' ')} {count}
                 </button>
@@ -254,7 +280,7 @@ export function SatellitePanel({
         </p>
         <div className="satellite-list">
           {filtered.map((sat) => (
-            <SatelliteItem key={sat.norad_id} sat={sat} onSelect={setSelectedSat} />
+            <SatelliteItem key={sat.norad_id} sat={sat} onSelect={onSelectSat} />
           ))}
         </div>
       </>
@@ -264,10 +290,6 @@ export function SatellitePanel({
   return (
     <aside className="panel">
       <div className="panel-header">
-        <div className="panel-title-row">
-          <span className="panel-app-name">{t('app.title')}</span>
-          <LangToggle />
-        </div>
         {!trackedSatellite && countryName && (
           <h2 className="panel-country">{countryName}</h2>
         )}

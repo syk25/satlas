@@ -25,13 +25,52 @@ html, body, #root {
 
 .layout {
   display: flex;
+  flex-direction: column;
   height: 100%;
+}
+
+.content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
 .globe-container {
   flex: 1;
   position: relative;
   overflow: hidden;
+}
+
+/* ── Navigation bar ── */
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 44px;
+  padding: 0 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 900;
+}
+
+.navbar-brand {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.navbar-views {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.navbar-spacer {
+  flex: 1;
 }
 
 /* ── Panel ── */
@@ -46,9 +85,12 @@ html, body, #root {
 }
 
 .panel-header {
-  padding: 20px 16px 16px;
+  padding: 14px 16px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
 }
 
 .panel-title-row {
@@ -303,6 +345,15 @@ html, body, #root {
   color: var(--text-secondary);
   line-height: 1.5;
   margin-top: 4px;
+}
+
+.sat-offmap-warning {
+  font-size: 11px;
+  color: #fbbf24;
+  line-height: 1.5;
+  margin-top: 4px;
+  border-left: 2px solid #fbbf24;
+  padding-left: 8px;
 }
 
 .track-btn {

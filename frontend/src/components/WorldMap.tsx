@@ -1,6 +1,6 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import {
   degreesLat,
   degreesLong,
@@ -10,14 +10,24 @@ import {
   twoline2satrec,
 } from 'satellite.js'
 import { CATEGORY_COLOR } from '../types'
-import type { SatelliteOverhead } from '../types'
+import type { SatelliteCategory, SatelliteOverhead } from '../types'
+
+export interface WorldMapHandle {
+  flyTo: (lat: number, lon: number, zoom: number) => void
+}
 
 interface Props {
   onCountrySelect: (code: string, name: string) => void
+  onSatelliteSelect: (sat: SatelliteOverhead | null) => void
+  onSatelliteOffMap?: (direction: 'north' | 'south' | null) => void
   selectedCode: string | null
   satellites: SatelliteOverhead[]
+  selectedSat: SatelliteOverhead | null
   trackedSatellite: SatelliteOverhead | null
+  activeCategory: SatelliteCategory | null
 }
+
+const SAT_CLICK_RADIUS = 8 // px
 
 const COUNTRY_DEFAULT: L.PathOptions = {
   color: 'rgba(255,255,255,0.2)',
@@ -85,23 +95,26 @@ function drawGroundTrack(
   ctx.setLineDash([6, 5])
   ctx.lineWidth = 1.5
   ctx.strokeStyle = withAlpha(color, 0.45)
-  ctx.beginPath()
-  let started = false
-  for (let i = 0; i < points.length; i++) {
-    if (i > 0 && Math.abs(points[i][1] - points[i - 1][1]) > 180) {
-      ctx.stroke()
-      ctx.beginPath()
-      started = false
+
+  // Draw the track twice (original + +360 shift) so it stays visible
+  // regardless of which world-copy the camera is on after antimeridian crossings.
+  for (const lonShift of [0, 360, -360]) {
+    ctx.beginPath()
+    let penDown = false
+    for (let i = 0; i < points.length; i++) {
+      if (i > 0 && Math.abs(points[i][1] - points[i - 1][1]) > 180) {
+        ctx.stroke()
+        ctx.beginPath()
+        penDown = false
+      }
+      const pt = map.latLngToContainerPoint([points[i][0], points[i][1] + lonShift])
+      if (!penDown) {
+        ctx.moveTo(pt.x, pt.y)
+        penDown = true
+      } else ctx.lineTo(pt.x, pt.y)
     }
-    const pt = map.latLngToContainerPoint(points[i] as [number, number])
-    if (!started) {
-      ctx.moveTo(pt.x, pt.y)
-      started = true
-    } else {
-      ctx.lineTo(pt.x, pt.y)
-    }
+    ctx.stroke()
   }
-  ctx.stroke()
   ctx.setLineDash([])
 }
 
@@ -140,12 +153,19 @@ function drawFootprint(
   ctx.fill()
 }
 
-export function WorldMap({
-  onCountrySelect,
-  selectedCode,
-  satellites,
-  trackedSatellite,
-}: Props) {
+export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
+  {
+    onCountrySelect,
+    onSatelliteSelect,
+    onSatelliteOffMap,
+    selectedCode,
+    satellites,
+    selectedSat,
+    trackedSatellite,
+    activeCategory,
+  }: Props,
+  ref
+) {
   const mapDivRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -160,6 +180,15 @@ export function WorldMap({
   )
   const trailsRef = useRef<Map<number, Array<[number, number]>>>(new Map())
   const satellitesRef = useRef<SatelliteOverhead[]>([])
+  // canvas positions for click detection: norad_id → {x, y}
+  const satCanvasPosRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const activeCategoryRef = useRef<SatelliteCategory | null>(null)
+  const onSatelliteSelectRef = useRef(onSatelliteSelect)
+  const onSatelliteOffMapRef = useRef(onSatelliteOffMap)
+
+  // Selected mode (orbit preview, no camera follow)
+  const selectedSatRef = useRef<SatelliteOverhead | null>(null)
+  const selectedGroundTrackRef = useRef<Array<[number, number]>>([])
 
   // Tracking mode
   const trackedSatRef = useRef<SatelliteOverhead | null>(null)
@@ -167,6 +196,25 @@ export function WorldMap({
   const groundTrackRef = useRef<Array<[number, number]>>([])
   const trackTrailRef = useRef<Array<[number, number]>>([])
   const trackFrameRef = useRef(0)
+
+  useImperativeHandle(ref, () => ({
+    flyTo(lat, lon, zoom) {
+      mapRef.current?.flyTo([lat, lon], zoom, { animate: true, duration: 0.8 })
+    },
+  }))
+
+  // Sync mutable refs (avoid stale closures in RAF)
+  useEffect(() => {
+    activeCategoryRef.current = activeCategory
+  }, [activeCategory])
+
+  useEffect(() => {
+    onSatelliteSelectRef.current = onSatelliteSelect
+  }, [onSatelliteSelect])
+
+  useEffect(() => {
+    onSatelliteOffMapRef.current = onSatelliteOffMap
+  }, [onSatelliteOffMap])
 
   // Sync overhead satellites
   useEffect(() => {
@@ -183,6 +231,29 @@ export function WorldMap({
       } catch {}
     })
   }, [satellites])
+
+  // Selected mode: center map on satellite + compute ground track
+  useEffect(() => {
+    selectedSatRef.current = selectedSat
+    if (!selectedSat) {
+      selectedGroundTrackRef.current = []
+      return
+    }
+    try {
+      const satrec = twoline2satrec(selectedSat.line1.trim(), selectedSat.line2.trim())
+      selectedGroundTrackRef.current = computeGroundTrack(satrec)
+      const pv = propagate(satrec, new Date())
+      if (pv.position && typeof pv.position !== 'boolean') {
+        const gst = gstime(new Date())
+        const geo = eciToGeodetic(pv.position as any, gst)
+        mapRef.current?.setView(
+          [degreesLat(geo.latitude), degreesLong(geo.longitude)],
+          4,
+          { animate: true }
+        )
+      }
+    } catch {}
+  }, [selectedSat])
 
   // Tracking mode setup / teardown
   useEffect(() => {
@@ -209,18 +280,34 @@ export function WorldMap({
       return
     }
 
-    // Reset country highlight and zoom out to world view
+    // Reset country highlight, disable drag, center on satellite
     if (geoLayerRef.current) geoLayerRef.current.setStyle(COUNTRY_DEFAULT)
     selectedLayerRef.current = null
-    mapRef.current?.setView([20, 0], 2, { animate: true })
+    mapRef.current?.dragging.disable()
+    mapRef.current?.scrollWheelZoom.enable()
+    try {
+      const pv0 = propagate(trackedSatrecRef.current!, new Date())
+      if (pv0.position && typeof pv0.position !== 'boolean') {
+        const gst0 = gstime(new Date())
+        const geo0 = eciToGeodetic(pv0.position as any, gst0)
+        mapRef.current?.setView(
+          [degreesLat(geo0.latitude), degreesLong(geo0.longitude)],
+          4,
+          { animate: true }
+        )
+      }
+    } catch {}
 
-    // Refresh ground track every 60s (orbit shifts ~0.25°/s)
+    // Refresh ground track every 60s
     const timer = window.setInterval(() => {
       const satrec = trackedSatrecRef.current
       if (satrec) groundTrackRef.current = computeGroundTrack(satrec)
     }, 60_000)
 
-    return () => clearInterval(timer)
+    return () => {
+      clearInterval(timer)
+      mapRef.current?.dragging.enable()
+    }
   }, [trackedSatellite])
 
   // Canvas resize
@@ -245,9 +332,11 @@ export function WorldMap({
     const map = L.map(mapDivRef.current, {
       center: [20, 0],
       zoom: 2,
-      minZoom: 1,
+      minZoom: 2,
       maxZoom: 10,
       zoomControl: true,
+      maxBounds: L.latLngBounds(L.latLng(-85, -720), L.latLng(85, 720)),
+      maxBoundsViscosity: 0.3,
     })
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
@@ -262,9 +351,29 @@ export function WorldMap({
       trackTrailRef.current = []
     })
 
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      if (trackedSatRef.current) return
+      const { x, y } = e.containerPoint
+      let nearest: SatelliteOverhead | null = null
+      let minDist = SAT_CLICK_RADIUS
+      satCanvasPosRef.current.forEach((pos, noradId) => {
+        const d = Math.sqrt((pos.x - x) ** 2 + (pos.y - y) ** 2)
+        if (d < minDist) {
+          minDist = d
+          nearest = satellitesRef.current.find((s) => s.norad_id === noradId) ?? null
+        }
+      })
+      if (nearest) {
+        onSatelliteSelectRef.current(nearest)
+        L.DomEvent.stopPropagation(e as unknown as Event)
+      }
+    })
+
     fetch('/countries.geojson')
       .then((r) => r.json())
       .then((data) => {
+        // Guard: map may have been removed if the component unmounted while fetching
+        if (mapRef.current !== map) return
         const layer = L.geoJSON(data, {
           style: () => COUNTRY_DEFAULT,
           onEachFeature: (feature, lyr) => {
@@ -318,64 +427,167 @@ export function WorldMap({
                 const geo = eciToGeodetic(pv.position as any, gst)
                 const lat = degreesLat(geo.latitude)
                 const lon = degreesLong(geo.longitude)
-                const pt = map.latLngToContainerPoint([lat, lon])
                 const color =
                   tracked.category && CATEGORY_COLOR[tracked.category]
                     ? CATEGORY_COLOR[tracked.category]
                     : '#facc15'
 
-                // Footprint
-                drawFootprint(ctx, map, pv.position as any, lat, lon, color)
+                // Camera follow — drag is disabled, no Leaflet conflict
+                map.setView([lat, lon], map.getZoom(), {
+                  animate: false,
+                  noMoveStart: true,
+                } as L.ZoomPanOptions)
+
+                // ±85° boundary lines (Web Mercator coverage limit)
+                const y85N = map.latLngToContainerPoint([85, 0]).y
+                const y85S = map.latLngToContainerPoint([-85, 0]).y
+                ctx.save()
+                ctx.setLineDash([4, 8])
+                ctx.lineWidth = 1
+                ctx.strokeStyle = 'rgba(255,255,255,0.15)'
+                ctx.beginPath()
+                ctx.moveTo(0, y85N)
+                ctx.lineTo(canvas.width, y85N)
+                ctx.stroke()
+                ctx.beginPath()
+                ctx.moveTo(0, y85S)
+                ctx.lineTo(canvas.width, y85S)
+                ctx.stroke()
+                ctx.restore()
 
                 // Ground track
                 drawGroundTrack(ctx, map, groundTrackRef.current, color)
 
-                // Trail (past positions, stored in lat/lon)
-                trackFrameRef.current++
-                if (trackFrameRef.current % TRAIL_EVERY_N_FRAMES === 0) {
-                  trackTrailRef.current.push([lat, lon])
-                  if (trackTrailRef.current.length > TRACK_TRAIL_POINTS)
-                    trackTrailRef.current.shift()
-                }
-                const trail = trackTrailRef.current
-                if (trail.length > 1) {
-                  ctx.setLineDash([])
-                  for (let i = 1; i < trail.length; i++) {
-                    const alpha = (i / trail.length) * 0.7
-                    const p1 = map.latLngToContainerPoint(
-                      trail[i - 1] as [number, number]
-                    )
-                    const p2 = map.latLngToContainerPoint(trail[i] as [number, number])
-                    ctx.strokeStyle = withAlpha(color, alpha)
-                    ctx.lineWidth = 2
-                    ctx.beginPath()
-                    ctx.moveTo(p1.x, p1.y)
-                    ctx.lineTo(p2.x, p2.y)
-                    ctx.stroke()
-                  }
-                }
+                const offMap = Math.abs(lat) > 85
 
-                // Satellite dot
-                ctx.shadowBlur = 14
-                ctx.shadowColor = color
-                ctx.fillStyle = color
-                ctx.beginPath()
-                ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2)
-                ctx.fill()
-                ctx.shadowBlur = 0
+                if (offMap) {
+                  onSatelliteOffMapRef.current?.(lat > 0 ? 'north' : 'south')
+                  const cx = canvas.width / 2
+                  const isNorth = lat > 0
+                  const cy = isNorth ? 32 : canvas.height - 32
+                  ctx.fillStyle = withAlpha(color, 0.9)
+                  ctx.beginPath()
+                  if (isNorth) {
+                    ctx.moveTo(cx, cy - 10)
+                    ctx.lineTo(cx - 8, cy + 6)
+                    ctx.lineTo(cx + 8, cy + 6)
+                  } else {
+                    ctx.moveTo(cx, cy + 10)
+                    ctx.lineTo(cx - 8, cy - 6)
+                    ctx.lineTo(cx + 8, cy - 6)
+                  }
+                  ctx.closePath()
+                  ctx.fill()
+                  ctx.fillStyle = withAlpha(color, 0.65)
+                  ctx.font = '10px system-ui, sans-serif'
+                  ctx.textAlign = 'center'
+                  ctx.fillText(tracked.name, cx, isNorth ? cy + 18 : cy - 12)
+                } else {
+                  onSatelliteOffMapRef.current?.(null)
+                  const pt = map.latLngToContainerPoint([lat, lon])
+
+                  // Footprint
+                  drawFootprint(ctx, map, pv.position as any, lat, lon, color)
+
+                  // Trail
+                  trackFrameRef.current++
+                  if (trackFrameRef.current % TRAIL_EVERY_N_FRAMES === 0) {
+                    trackTrailRef.current.push([lat, lon])
+                    if (trackTrailRef.current.length > TRACK_TRAIL_POINTS)
+                      trackTrailRef.current.shift()
+                  }
+                  const trail = trackTrailRef.current
+                  if (trail.length > 1) {
+                    ctx.setLineDash([])
+                    for (let i = 1; i < trail.length; i++) {
+                      const alpha = (i / trail.length) * 0.7
+                      const p1 = map.latLngToContainerPoint(
+                        trail[i - 1] as [number, number]
+                      )
+                      const p2 = map.latLngToContainerPoint(
+                        trail[i] as [number, number]
+                      )
+                      ctx.strokeStyle = withAlpha(color, alpha)
+                      ctx.lineWidth = 2
+                      ctx.beginPath()
+                      ctx.moveTo(p1.x, p1.y)
+                      ctx.lineTo(p2.x, p2.y)
+                      ctx.stroke()
+                    }
+                  }
+
+                  // Direction arrow (2s velocity vector)
+                  try {
+                    const ahead = new Date(now.getTime() + 2000)
+                    const pvAhead = propagate(trackedSatrec, ahead)
+                    if (pvAhead.position && typeof pvAhead.position !== 'boolean') {
+                      const gstAhead = gstime(ahead)
+                      const geoAhead = eciToGeodetic(pvAhead.position as any, gstAhead)
+                      const ptAhead = map.latLngToContainerPoint([
+                        degreesLat(geoAhead.latitude),
+                        degreesLong(geoAhead.longitude),
+                      ])
+                      const dx = ptAhead.x - pt.x
+                      const dy = ptAhead.y - pt.y
+                      const len = Math.sqrt(dx * dx + dy * dy)
+                      if (len > 0.5) {
+                        const nx = dx / len
+                        const ny = dy / len
+                        const arrowLen = 18
+                        const ax = pt.x + nx * arrowLen
+                        const ay = pt.y + ny * arrowLen
+                        const hw = 5
+                        const hl = 7
+                        const px = -ny
+                        const py = nx
+                        ctx.beginPath()
+                        ctx.moveTo(pt.x, pt.y)
+                        ctx.lineTo(ax, ay)
+                        ctx.strokeStyle = withAlpha(color, 0.85)
+                        ctx.lineWidth = 1.5
+                        ctx.setLineDash([])
+                        ctx.stroke()
+                        ctx.beginPath()
+                        ctx.moveTo(ax + nx * hl, ay + ny * hl)
+                        ctx.lineTo(ax + px * hw, ay + py * hw)
+                        ctx.lineTo(ax - px * hw, ay - py * hw)
+                        ctx.closePath()
+                        ctx.fillStyle = withAlpha(color, 0.85)
+                        ctx.fill()
+                      }
+                    }
+                  } catch {}
+
+                  // Satellite dot
+                  ctx.shadowBlur = 14
+                  ctx.shadowColor = color
+                  ctx.fillStyle = color
+                  ctx.beginPath()
+                  ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2)
+                  ctx.fill()
+                  ctx.shadowBlur = 0
+                }
               }
             } catch {}
           } else {
-            // ── Overhead mode ──────────────────────────────────────
+            // ── Overhead / Selected mode ────────────────────────────
             const cache = satrecCacheRef.current
             if (cache.size > 0) {
               const now = new Date()
               const trails = trailsRef.current
+              const catFilter = activeCategoryRef.current
+              const selSat = selectedSatRef.current
               frameRef.current++
               const addTrail = frameRef.current % TRAIL_EVERY_N_FRAMES === 0
+              const newPositions = new Map<number, { x: number; y: number }>()
 
               cache.forEach((satrec, noradId) => {
                 try {
+                  const sat = satellitesRef.current.find((s) => s.norad_id === noradId)
+                  // When a satellite is selected, hide all others
+                  if (selSat && sat?.norad_id !== selSat.norad_id) return
+                  if (!selSat && catFilter && sat?.category !== catFilter) return
+
                   const pv = propagate(satrec, now)
                   if (!pv.position || typeof pv.position === 'boolean') return
                   const gst = gstime(now)
@@ -384,7 +596,8 @@ export function WorldMap({
                   const lon = degreesLong(geo.longitude)
                   const pt = map.latLngToContainerPoint([lat, lon])
 
-                  const sat = satellitesRef.current.find((s) => s.norad_id === noradId)
+                  newPositions.set(noradId, { x: pt.x, y: pt.y })
+
                   const color =
                     sat?.category && CATEGORY_COLOR[sat.category]
                       ? CATEGORY_COLOR[sat.category]
@@ -425,6 +638,16 @@ export function WorldMap({
                   ctx.shadowBlur = 0
                 } catch {}
               })
+
+              satCanvasPosRef.current = newPositions
+
+              // Draw ground track for selected satellite (orbit preview mode)
+              if (selectedSatRef.current && selectedGroundTrackRef.current.length > 1) {
+                const selColor = selectedSatRef.current.category
+                  ? CATEGORY_COLOR[selectedSatRef.current.category]
+                  : '#facc15'
+                drawGroundTrack(ctx, map, selectedGroundTrackRef.current, selColor)
+              }
             }
           }
         }
@@ -481,4 +704,4 @@ export function WorldMap({
       />
     </div>
   )
-}
+})
