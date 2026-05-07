@@ -35,6 +35,7 @@ async def refresh_tle() -> None:
 
     if count > 0:
         await cache_clear_pattern("satlas:overhead:*")
+        await cache_clear_pattern("satlas:positions")
 
     logger.info("TLE refresh complete, processed %d satellites", count)
 

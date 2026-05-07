@@ -22,7 +22,9 @@ async def test_refresh_tle_clears_cache_on_new_data():
     ):
         await refresh_tle()
 
-    mock_clear.assert_called_once_with("satlas:overhead:*")
+    assert mock_clear.call_count == 2
+    mock_clear.assert_any_call("satlas:overhead:*")
+    mock_clear.assert_any_call("satlas:positions")
 
 
 @pytest.mark.asyncio

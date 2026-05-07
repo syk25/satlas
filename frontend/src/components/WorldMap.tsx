@@ -9,12 +9,13 @@ import {
   propagate,
   twoline2satrec,
 } from 'satellite.js'
-import type { SatelliteOverhead } from '../types'
+import type { SatelliteOverhead, SatellitePosition } from '../types'
 
 interface Props {
   onCountrySelect: (code: string, name: string) => void
   selectedCode: string | null
   satellites: SatelliteOverhead[]
+  allPositions: SatellitePosition[]
 }
 
 function getSatPosition(
@@ -49,15 +50,20 @@ const COUNTRY_SELECTED: L.PathOptions = {
   weight: 2,
 }
 
-export function WorldMap({ onCountrySelect, selectedCode, satellites }: Props) {
+export function WorldMap({
+  onCountrySelect,
+  selectedCode,
+  satellites,
+  allPositions,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const geoLayerRef = useRef<L.GeoJSON | null>(null)
   const selectedLayerRef = useRef<L.Layer | null>(null)
   const markerLayerRef = useRef<L.LayerGroup | null>(null)
 
-  // Satellite positions, updated every 5 s
-  const [satPositions, setSatPositions] = useState<[number, number][]>([])
+  // Overhead satellite positions, refreshed every 5s via satellite.js
+  const [overheadPositions, setOverheadPositions] = useState<[number, number][]>([])
 
   // Init map once
   useEffect(() => {
@@ -108,7 +114,6 @@ export function WorldMap({ onCountrySelect, selectedCode, satellites }: Props) {
                 ;(lyr as L.Path).setStyle(COUNTRY_SELECTED)
                 selectedLayerRef.current = lyr
 
-                // Zoom to country
                 map.fitBounds((lyr as L.GeoJSON).getBounds(), {
                   padding: [40, 40],
                   maxZoom: 6,
@@ -133,7 +138,7 @@ export function WorldMap({ onCountrySelect, selectedCode, satellites }: Props) {
     }
   }, [onCountrySelect])
 
-  // Update selected country highlight when selectedCode changes externally
+  // Reset country highlight when deselected externally
   useEffect(() => {
     if (!selectedCode && selectedLayerRef.current) {
       ;(selectedLayerRef.current as L.Path).setStyle(COUNTRY_DEFAULT)
@@ -141,10 +146,10 @@ export function WorldMap({ onCountrySelect, selectedCode, satellites }: Props) {
     }
   }, [selectedCode])
 
-  // Compute and refresh satellite positions every 5 s
+  // Recompute overhead satellite positions every 5s (only when a country is selected)
   useEffect(() => {
     if (satellites.length === 0) {
-      setSatPositions([])
+      setOverheadPositions([])
       return
     }
 
@@ -155,7 +160,7 @@ export function WorldMap({ onCountrySelect, selectedCode, satellites }: Props) {
         const pos = getSatPosition(sat.line1, sat.line2, now)
         if (pos) positions.push(pos)
       })
-      setSatPositions(positions)
+      setOverheadPositions(positions)
     }
 
     compute()
@@ -163,13 +168,18 @@ export function WorldMap({ onCountrySelect, selectedCode, satellites }: Props) {
     return () => clearInterval(interval)
   }, [satellites])
 
-  // Render satellite markers onto the Leaflet layer group
+  // Render markers: overhead when country selected, all positions otherwise
   useEffect(() => {
     const layer = markerLayerRef.current
     if (!layer) return
 
     layer.clearLayers()
-    satPositions.forEach(([lat, lon]) => {
+
+    const toRender: [number, number][] = selectedCode
+      ? overheadPositions
+      : allPositions.map((p) => [p.lat, p.lon])
+
+    toRender.forEach(([lat, lon]) => {
       L.circleMarker([lat, lon], {
         radius: 4,
         color: '#000',
@@ -178,7 +188,7 @@ export function WorldMap({ onCountrySelect, selectedCode, satellites }: Props) {
         fillOpacity: 1,
       }).addTo(layer)
     })
-  }, [satPositions])
+  }, [selectedCode, overheadPositions, allPositions])
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 }

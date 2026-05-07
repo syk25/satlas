@@ -16,6 +16,15 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 router = APIRouter(prefix="/satellites", tags=["satellites"])
 
 OVERHEAD_CACHE_TTL = 60  # seconds
+POSITIONS_CACHE_TTL = 60  # seconds
+POSITIONS_CACHE_KEY = "satlas:positions"
+
+
+class SatellitePosition(BaseModel):
+    norad_id: int
+    name: str
+    lat: float
+    lon: float
 
 
 class SatelliteOverhead(BaseModel):
@@ -85,6 +94,45 @@ async def get_overhead(
         cache_key,
         json.dumps([item.model_dump(mode="json") for item in result]),
         ttl=OVERHEAD_CACHE_TTL,
+    )
+
+    return result
+
+
+@router.get("/positions", response_model=list[SatellitePosition])
+async def get_positions(db: DbSession) -> list[SatellitePosition]:
+    cached = await cache.cache_get(POSITIONS_CACHE_KEY)
+    if cached is not None:
+        return [SatellitePosition(**item) for item in json.loads(cached)]
+
+    rows = await get_latest_tle_snapshots(db)
+    if not rows:
+        raise HTTPException(
+            status_code=503,
+            detail="Satellite data is not yet available. Try again shortly.",
+        )
+
+    now = datetime.now(timezone.utc)
+    result: list[SatellitePosition] = []
+
+    for satellite, snapshot in rows:
+        pos = get_position(snapshot.line1.strip(), snapshot.line2.strip(), at=now)
+        if pos is None:
+            continue
+        lat, lon, _ = pos
+        result.append(
+            SatellitePosition(
+                norad_id=satellite.norad_id,
+                name=satellite.name,
+                lat=round(lat, 4),
+                lon=round(lon, 4),
+            )
+        )
+
+    await cache.cache_set(
+        POSITIONS_CACHE_KEY,
+        json.dumps([item.model_dump() for item in result]),
+        ttl=POSITIONS_CACHE_TTL,
     )
 
     return result

@@ -1,3 +1,10 @@
+export interface SatellitePosition {
+  norad_id: number
+  name: string
+  lat: number
+  lon: number
+}
+
 export interface SatelliteOverhead {
   norad_id: number
   name: string
