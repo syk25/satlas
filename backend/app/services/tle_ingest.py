@@ -89,6 +89,8 @@ def orbit_class_from_tle(line2: str) -> OrbitClass:
 
 logger = logging.getLogger(__name__)
 
+_BATCH = 500  # rows per bulk statement — stays under pg's 65535-param limit
+
 
 def _fetch_raw_sync(url: str) -> tuple[int, str]:
     """Synchronous fetch; runs in a thread via asyncio.to_thread."""
@@ -156,54 +158,72 @@ async def refresh_tle(db: AsyncSession) -> int:
             len(blocks),
         )
 
+        # Parse all blocks upfront
+        sat_rows = []
+        tle_meta: list[tuple[int, str, str, datetime]] = []
         for name, line1, line2 in blocks:
             norad_id = int(line2[2:7])
-            orbit_class = orbit_class_from_tle(line2)
-
-            # UPSERT: never downgrade a specific category to OTHER
-            stmt = pg_insert(Satellite).values(
-                norad_id=norad_id,
-                name=name,
-                is_active=True,
-                category=category,
-                orbit_class=orbit_class,
+            sat_rows.append(
+                {
+                    "norad_id": norad_id,
+                    "name": name,
+                    "is_active": True,
+                    "category": category,
+                    "orbit_class": orbit_class_from_tle(line2),
+                }
             )
+            tle_meta.append((norad_id, line1, line2, _parse_epoch(line1)))
+
+        # Bulk UPSERT satellites in chunks (pg 65535-param limit)
+        norad_to_id: dict[int, int] = {}
+        for i in range(0, len(sat_rows), _BATCH):
+            chunk = sat_rows[i : i + _BATCH]
+            ins = pg_insert(Satellite).values(chunk)
             if category == SatelliteCategory.OTHER:
-                # OTHER is catch-all — don't overwrite a more specific category
-                stmt = stmt.on_conflict_do_update(
+                stmt = ins.on_conflict_do_update(
                     index_elements=["norad_id"],
                     set_={
-                        "name": stmt.excluded.name,
-                        "orbit_class": stmt.excluded.orbit_class,
+                        "name": ins.excluded.name,
+                        "orbit_class": ins.excluded.orbit_class,
                     },
                 )
             else:
-                stmt = stmt.on_conflict_do_update(
+                stmt = ins.on_conflict_do_update(
                     index_elements=["norad_id"],
                     set_={
-                        "name": stmt.excluded.name,
-                        "category": stmt.excluded.category,
-                        "orbit_class": stmt.excluded.orbit_class,
+                        "name": ins.excluded.name,
+                        "category": ins.excluded.category,
+                        "orbit_class": ins.excluded.orbit_class,
                     },
                 )
-            result = await db.execute(stmt.returning(Satellite.id))
-            satellite_id = result.scalar_one()
+            result = await db.execute(stmt.returning(Satellite.norad_id, Satellite.id))
+            for row in result:
+                norad_to_id[row.norad_id] = row.id
 
-            epoch = _parse_epoch(line1)
-            db.add(
-                TleSnapshot(
-                    satellite_id=satellite_id,
-                    line1=line1,
-                    line2=line2,
-                    epoch=epoch,
-                    ingested_at=now,
-                )
-            )
-            total += 1
+        # Bulk insert TLE snapshots in chunks
+        snap_rows = [
+            {
+                "satellite_id": norad_to_id[norad_id],
+                "line1": line1,
+                "line2": line2,
+                "epoch": epoch,
+                "ingested_at": now,
+            }
+            for norad_id, line1, line2, epoch in tle_meta
+            if norad_id in norad_to_id
+        ]
+        for i in range(0, len(snap_rows), _BATCH):
+            await db.execute(pg_insert(TleSnapshot).values(snap_rows[i : i + _BATCH]))
 
         await db.commit()
+        total += len(sat_rows)
         logger.info(
-            "[%d/%d] %s: committed, running total=%d", idx, feed_count, group, total
+            "[%d/%d] %s: committed %d satellites, running total=%d",
+            idx,
+            feed_count,
+            group,
+            len(sat_rows),
+            total,
         )
 
         # Polite delay — datacenter IPs are rate-limited more aggressively
