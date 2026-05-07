@@ -64,7 +64,7 @@ Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE 
 - [x] `GET /satellites/overhead/{country_code}` — first MVP endpoint
 - [x] Redis caching (60 s TTL per country, graceful degradation)
 - [x] Scheduled TLE ingestion (APScheduler, twice daily at 00:00 / 12:00 UTC)
-- [ ] Frontend (CesiumJS globe + country selection)
+- [x] Frontend MVP (CesiumJS globe · country click · satellite panel · i18n en/ko)
 - [ ] Deployment (Fly.io + Vercel)
 
 ---

@@ -2,5 +2,22 @@
   "app": {
     "title": "Satlas",
     "tagline": "Satellite pass tracking by national territory"
+  },
+  "panel": {
+    "placeholder": "Click on a country to see overhead satellites",
+    "loading": "Loading...",
+    "error": "Failed to load satellite data",
+    "noSatellites": "No satellites currently overhead",
+    "count_one": "{{count}} satellite overhead",
+    "count_other": "{{count}} satellites overhead",
+    "updatedAt": "As of {{time}} UTC"
+  },
+  "satellite": {
+    "norad": "NORAD {{id}}",
+    "unknownOperator": "Unknown"
+  },
+  "language": {
+    "en": "EN",
+    "ko": "KO"
   }
 }
