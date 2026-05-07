@@ -31,6 +31,18 @@ class OperatorType(enum.Enum):
     INTERNATIONAL = "INTERNATIONAL"
 
 
+class SatelliteCategory(enum.Enum):
+    STATION = "STATION"  # ISS, Tiangong
+    WEATHER = "WEATHER"  # NOAA, Meteosat, GOES
+    GNSS = "GNSS"  # GPS, GLONASS, Galileo, BeiDou
+    MILITARY = "MILITARY"  # Military / classified
+    AMATEUR = "AMATEUR"  # Amateur radio
+    COMMERCIAL = "COMMERCIAL"  # Starlink, OneWeb, Iridium
+    EARTH_OBS = "EARTH_OBS"  # Landsat, Sentinel, resource sats
+    SCIENTIFIC = "SCIENTIFIC"  # Research / science
+    OTHER = "OTHER"  # Unclassified active
+
+
 _tz = DateTime(timezone=True)
 
 
@@ -49,6 +61,9 @@ class Satellite(Base):
         Enum(OrbitClass, name="orbit_class_type")
     )
     launch_date: Mapped[date | None] = mapped_column(Date)
+    category: Mapped[SatelliteCategory | None] = mapped_column(
+        Enum(SatelliteCategory, name="satellite_category"), nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(_tz, server_default="now()")
 

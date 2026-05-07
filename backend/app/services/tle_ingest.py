@@ -1,19 +1,42 @@
+import asyncio
+import math
 from datetime import datetime, timezone
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.satellite import Satellite, TleSnapshot
+from app.models.satellite import OrbitClass, Satellite, SatelliteCategory, TleSnapshot
 
-CELESTRAK_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle"
-CELESTRAK_STATIONS_URL = (
-    "https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle"
-)
+BASE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle"
+
+# Ordered by priority: specific categories first, OTHER (active) last.
+# If a satellite appears in multiple feeds, the first match wins.
+CATEGORY_FEEDS: list[tuple[str, SatelliteCategory]] = [
+    ("stations", SatelliteCategory.STATION),
+    ("weather", SatelliteCategory.WEATHER),
+    ("noaa", SatelliteCategory.WEATHER),
+    ("goes", SatelliteCategory.WEATHER),
+    ("military", SatelliteCategory.MILITARY),
+    ("amateur", SatelliteCategory.AMATEUR),
+    ("gps-ops", SatelliteCategory.GNSS),
+    ("glo-ops", SatelliteCategory.GNSS),
+    ("galileo", SatelliteCategory.GNSS),
+    ("beidou", SatelliteCategory.GNSS),
+    ("starlink", SatelliteCategory.COMMERCIAL),
+    ("oneweb", SatelliteCategory.COMMERCIAL),
+    ("iridium", SatelliteCategory.COMMERCIAL),
+    ("iridium-NEXT", SatelliteCategory.COMMERCIAL),
+    ("resource", SatelliteCategory.EARTH_OBS),
+    ("planet", SatelliteCategory.EARTH_OBS),
+    ("science", SatelliteCategory.SCIENTIFIC),
+    ("active", SatelliteCategory.OTHER),  # catch-all, lowest priority
+]
+
+_HEADERS = {"User-Agent": "satlas/0.1 (https://github.com/syk25/satlas)"}
 
 
 def _parse_tle_blocks(raw: str) -> list[tuple[str, str, str]]:
-    """Parse raw TLE text into (name, line1, line2) tuples."""
     lines = [ln.rstrip() for ln in raw.splitlines() if ln.strip()]
     blocks = []
     for i in range(0, len(lines) - 2, 3):
@@ -26,7 +49,6 @@ def _parse_tle_blocks(raw: str) -> list[tuple[str, str, str]]:
 
 
 def _parse_epoch(line1: str) -> datetime:
-    """Parse TLE epoch from line 1 into a UTC datetime."""
     epoch_str = line1[18:32].strip()
     year_2d = int(epoch_str[:2])
     year = 2000 + year_2d if year_2d < 57 else 1900 + year_2d
@@ -39,60 +61,120 @@ def _parse_epoch(line1: str) -> datetime:
     return base + timedelta(days=day - 1) + timedelta(days=frac)
 
 
-async def fetch_and_store_tle(db: AsyncSession, url: str = CELESTRAK_URL) -> int:
-    """Fetch TLE data from CelesTrak and upsert satellites + snapshots.
+def orbit_class_from_tle(line2: str) -> OrbitClass:
+    """Derive orbit class from TLE line 2 using mean motion and eccentricity."""
+    try:
+        mean_motion = float(line2[52:63].strip())  # rev/day
+        eccentricity = float("0." + line2[26:33].strip())
 
-    Returns the number of satellites processed.
+        if eccentricity > 0.1:
+            return OrbitClass.HEO
+
+        # Semi-major axis from mean motion: a = (μ / n²)^(1/3)
+        # μ = 398600.4418 km³/s², n in rad/s
+        n_rad_s = mean_motion * 2 * math.pi / 86400.0
+        a_km = (398600.4418 / n_rad_s**2) ** (1.0 / 3.0)
+        alt_km = a_km - 6371.0
+
+        if alt_km < 2000:
+            return OrbitClass.LEO
+        elif alt_km < 35500:
+            return OrbitClass.MEO
+        else:
+            return OrbitClass.GEO
+    except (ValueError, ZeroDivisionError, IndexError):
+        return OrbitClass.LEO
+
+
+async def _fetch_raw(
+    client: httpx.AsyncClient, group: str
+) -> list[tuple[str, str, str]]:
+    url = BASE_URL.format(group=group)
+    try:
+        resp = await client.get(url)
+        body = resp.text
+        if "GP data has not updated" in body:
+            return []
+        if resp.status_code not in (200, 403):
+            return []
+        return _parse_tle_blocks(body)
+    except (httpx.HTTPError, OSError):
+        return []
+
+
+async def refresh_tle(db: AsyncSession) -> int:
+    """Fetch all category feeds and upsert satellites with category + orbit_class.
+
+    Priority: specific category feeds are processed first. The `active` (OTHER)
+    feed runs last so it never overwrites a more specific category already set.
+    Returns total number of TLE snapshots stored.
     """
-    headers = {"User-Agent": "satlas/0.1 (https://github.com/syk25/satlas)"}
-    async with httpx.AsyncClient(timeout=30, headers=headers, http2=False) as client:
-        response = await client.get(url)
-
-    # CelesTrak returns 403 + plain-text notice when data hasn't changed
-    body = response.text
-    if "GP data has not updated" in body:
-        return 0
-
-    if response.status_code not in (200, 403):
-        response.raise_for_status()
-
-    blocks = _parse_tle_blocks(body)
     now = datetime.now(timezone.utc)
-    count = 0
+    total = 0
 
-    for name, line1, line2 in blocks:
-        norad_id = int(line2[2:7])
+    async with httpx.AsyncClient(timeout=30, headers=_HEADERS, http2=False) as client:
+        for group, category in CATEGORY_FEEDS:
+            blocks = await _fetch_raw(client, group)
+            if not blocks:
+                continue
 
-        # Upsert satellite
-        result = await db.execute(
-            select(Satellite).where(Satellite.norad_id == norad_id)
-        )
-        satellite = result.scalar_one_or_none()
-        if satellite is None:
-            satellite = Satellite(norad_id=norad_id, name=name, is_active=True)
-            db.add(satellite)
-            await db.flush()
+            for name, line1, line2 in blocks:
+                norad_id = int(line2[2:7])
 
-        # Store TLE snapshot
-        epoch = _parse_epoch(line1)
-        snapshot = TleSnapshot(
-            satellite_id=satellite.id,
-            line1=line1,
-            line2=line2,
-            epoch=epoch,
-            ingested_at=now,
-        )
-        db.add(snapshot)
-        count += 1
+                result = await db.execute(
+                    select(Satellite).where(Satellite.norad_id == norad_id)
+                )
+                satellite = result.scalar_one_or_none()
 
-    await db.commit()
-    return count
+                if satellite is None:
+                    satellite = Satellite(
+                        norad_id=norad_id,
+                        name=name,
+                        is_active=True,
+                        category=category,
+                        orbit_class=orbit_class_from_tle(line2),
+                    )
+                    db.add(satellite)
+                else:
+                    # Never downgrade a specific category to OTHER
+                    if satellite.category is None or (
+                        satellite.category == SatelliteCategory.OTHER
+                        and category != SatelliteCategory.OTHER
+                    ):
+                        satellite.category = category
+                    if satellite.orbit_class is None:
+                        satellite.orbit_class = orbit_class_from_tle(line2)
+
+                await db.flush()
+
+                epoch = _parse_epoch(line1)
+                db.add(
+                    TleSnapshot(
+                        satellite_id=satellite.id,
+                        line1=line1,
+                        line2=line2,
+                        epoch=epoch,
+                        ingested_at=now,
+                    )
+                )
+                total += 1
+
+            await db.commit()
+
+            # Polite delay between CelesTrak requests
+            await asyncio.sleep(0.5)
+
+    return total
 
 
 async def get_latest_tle_snapshots(
     db: AsyncSession,
+    category: SatelliteCategory | None = None,
 ) -> list[tuple[Satellite, TleSnapshot]]:
-    """Return the most recent TLE snapshot for each active satellite."""
+    """Return the most recent TLE snapshot for each active satellite.
+
+    Optionally filtered by category.
+    """
     from sqlalchemy import func
 
     subq = (
@@ -104,7 +186,7 @@ async def get_latest_tle_snapshots(
         .subquery()
     )
 
-    result = await db.execute(
+    q = (
         select(Satellite, TleSnapshot)
         .join(TleSnapshot, Satellite.id == TleSnapshot.satellite_id)
         .join(
@@ -114,4 +196,14 @@ async def get_latest_tle_snapshots(
         )
         .where(Satellite.is_active == True)  # noqa: E712
     )
+
+    if category is not None:
+        q = q.where(Satellite.category == category)
+
+    result = await db.execute(q)
     return result.all()
+
+
+# Legacy shim used by scheduler — kept for backward compat during transition
+async def fetch_and_store_tle(db: AsyncSession, url: str = "") -> int:
+    return await refresh_tle(db)

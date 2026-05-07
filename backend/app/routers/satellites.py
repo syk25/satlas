@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.satellite import SatelliteCategory
 from app.services import boundaries, cache
 from app.services.position import get_position
 from app.services.tle_ingest import get_latest_tle_snapshots
@@ -30,6 +31,7 @@ class SatellitePosition(BaseModel):
 class SatelliteOverhead(BaseModel):
     norad_id: int
     name: str
+    category: str | None
     operator_country: str | None
     operator_name: str | None
     operator_type: str | None
@@ -43,18 +45,28 @@ class SatelliteOverhead(BaseModel):
 async def get_overhead(
     country_code: str,
     db: DbSession,
+    category: str | None = None,
 ) -> list[SatelliteOverhead]:
     cc = country_code.upper()
 
     if not boundaries.country_exists(cc):
         raise HTTPException(status_code=404, detail=f"Country '{cc}' not found.")
 
-    cache_key = f"satlas:overhead:{cc}"
+    cat_filter: SatelliteCategory | None = None
+    if category:
+        try:
+            cat_filter = SatelliteCategory(category.upper())
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown category '{category}'."
+            ) from e
+
+    cache_key = f"satlas:overhead:{cc}" + (f":{category}" if category else "")
     cached = await cache.cache_get(cache_key)
     if cached is not None:
         return [SatelliteOverhead(**item) for item in json.loads(cached)]
 
-    rows = await get_latest_tle_snapshots(db)
+    rows = await get_latest_tle_snapshots(db, category=cat_filter)
     if not rows:
         raise HTTPException(
             status_code=503,
@@ -74,6 +86,7 @@ async def get_overhead(
                 SatelliteOverhead(
                     norad_id=satellite.norad_id,
                     name=satellite.name,
+                    category=satellite.category.value if satellite.category else None,
                     operator_country=satellite.operator_country,
                     operator_name=satellite.operator_name,
                     operator_type=(

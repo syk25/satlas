@@ -1,18 +1,17 @@
 from unittest.mock import AsyncMock, patch
 
-import httpx
 import pytest
 
-from app.services.scheduler import refresh_tle
+from app.services.scheduler import refresh_tle_job
 
 
 @pytest.mark.asyncio
-async def test_refresh_tle_clears_cache_on_new_data():
+async def test_refresh_clears_cache_when_snapshots_stored():
     with (
         patch(
-            "app.services.scheduler.fetch_and_store_tle",
+            "app.services.scheduler.refresh_tle",
             new_callable=AsyncMock,
-            return_value=100,
+            return_value=150,
         ),
         patch(
             "app.services.scheduler.cache_clear_pattern",
@@ -20,7 +19,7 @@ async def test_refresh_tle_clears_cache_on_new_data():
         ) as mock_clear,
         patch("app.services.scheduler.AsyncSessionLocal"),
     ):
-        await refresh_tle()
+        await refresh_tle_job()
 
     assert mock_clear.call_count == 2
     mock_clear.assert_any_call("satlas:overhead:*")
@@ -28,46 +27,12 @@ async def test_refresh_tle_clears_cache_on_new_data():
 
 
 @pytest.mark.asyncio
-async def test_refresh_tle_falls_back_to_stations_only_when_db_empty():
-    """Stations fallback runs only when DB is empty."""
-    mock_fetch = AsyncMock(return_value=0)
-    mock_snapshots = AsyncMock(return_value=[])
-
-    with (
-        patch("app.services.scheduler.fetch_and_store_tle", mock_fetch),
-        patch("app.services.scheduler.get_latest_tle_snapshots", mock_snapshots),
-        patch("app.services.scheduler.cache_clear_pattern", new_callable=AsyncMock),
-        patch("app.services.scheduler.AsyncSessionLocal"),
-    ):
-        await refresh_tle()
-
-    assert mock_fetch.call_count == 2
-
-
-@pytest.mark.asyncio
-async def test_refresh_tle_skips_stations_fallback_when_db_has_data():
-    """Skip stations fallback when DB already has satellite data."""
-    mock_fetch = AsyncMock(return_value=0)
-    mock_snapshots = AsyncMock(return_value=[object()])  # non-empty
-
-    with (
-        patch("app.services.scheduler.fetch_and_store_tle", mock_fetch),
-        patch("app.services.scheduler.get_latest_tle_snapshots", mock_snapshots),
-        patch("app.services.scheduler.cache_clear_pattern", new_callable=AsyncMock),
-        patch("app.services.scheduler.AsyncSessionLocal"),
-    ):
-        await refresh_tle()
-
-    assert mock_fetch.call_count == 1
-
-
-@pytest.mark.asyncio
-async def test_refresh_tle_handles_celestrak_unavailable():
+async def test_refresh_skips_cache_clear_when_no_new_data():
     with (
         patch(
-            "app.services.scheduler.fetch_and_store_tle",
+            "app.services.scheduler.refresh_tle",
             new_callable=AsyncMock,
-            side_effect=httpx.HTTPError("connection failed"),
+            return_value=0,
         ),
         patch(
             "app.services.scheduler.cache_clear_pattern",
@@ -75,6 +40,26 @@ async def test_refresh_tle_handles_celestrak_unavailable():
         ) as mock_clear,
         patch("app.services.scheduler.AsyncSessionLocal"),
     ):
-        await refresh_tle()
+        await refresh_tle_job()
+
+    mock_clear.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_refresh_handles_exception_gracefully():
+    """Any exception from refresh_tle must not propagate — job must not crash."""
+    with (
+        patch(
+            "app.services.scheduler.refresh_tle",
+            new_callable=AsyncMock,
+            side_effect=Exception("network failure"),
+        ),
+        patch(
+            "app.services.scheduler.cache_clear_pattern",
+            new_callable=AsyncMock,
+        ) as mock_clear,
+        patch("app.services.scheduler.AsyncSessionLocal"),
+    ):
+        await refresh_tle_job()  # must not raise
 
     mock_clear.assert_not_called()
