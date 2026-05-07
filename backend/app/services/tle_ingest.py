@@ -17,7 +17,7 @@ BASE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle
 CATEGORY_FEEDS: list[tuple[str, SatelliteCategory]] = [
     ("stations", SatelliteCategory.STATION),
     ("weather", SatelliteCategory.WEATHER),
-    ("noaa", SatelliteCategory.WEATHER),
+    # "noaa" removed — group no longer exists on CelesTrak; covered by "weather"
     ("goes", SatelliteCategory.WEATHER),
     ("military", SatelliteCategory.MILITARY),
     ("amateur", SatelliteCategory.AMATEUR),
@@ -25,14 +25,14 @@ CATEGORY_FEEDS: list[tuple[str, SatelliteCategory]] = [
     ("glo-ops", SatelliteCategory.GNSS),
     ("galileo", SatelliteCategory.GNSS),
     ("beidou", SatelliteCategory.GNSS),
-    ("starlink", SatelliteCategory.COMMERCIAL),
+    # "starlink" skipped — 403 from datacenter IPs; captured as OTHER via "active"
     ("oneweb", SatelliteCategory.COMMERCIAL),
-    ("iridium", SatelliteCategory.COMMERCIAL),
+    # "iridium" removed — old constellation deorbited, group no longer exists
     ("iridium-NEXT", SatelliteCategory.COMMERCIAL),
     ("resource", SatelliteCategory.EARTH_OBS),
     ("planet", SatelliteCategory.EARTH_OBS),
     ("science", SatelliteCategory.SCIENTIFIC),
-    ("active", SatelliteCategory.OTHER),  # catch-all, lowest priority
+    ("active", SatelliteCategory.OTHER),  # catch-all incl. Starlink as OTHER
 ]
 
 _HEADERS = {"User-Agent": "satlas/0.1 (https://github.com/syk25/satlas)"}
