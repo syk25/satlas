@@ -22,7 +22,7 @@ Previously, answering this question required checking each satellite's orbit ind
 
 ## Features
 
-- Select a country on an interactive 3D globe
+- Select a country on an interactive 2D world map
 - View satellites currently passing over the selected country in real time
 - Quantify dwell time per satellite
 - Visualize theoretical observation footprint (nadir / horizon)
@@ -36,7 +36,7 @@ Previously, answering this question required checking each satellite's orbit ind
 | Layer | Technologies |
 |---|---|
 | Backend | Python 3.11 · FastAPI · PostgreSQL · Redis · Celery · APScheduler · SGP4 |
-| Frontend | React · Vite · TypeScript · CesiumJS · satellite.js · turf.js |
+| Frontend | React · Vite · TypeScript · Leaflet · satellite.js |
 | Infra | Docker Compose · Fly.io · Vercel · Upstash · Cloudflare · GitHub Actions |
 | Data | CelesTrak (TLE) · Natural Earth (GeoJSON) |
 
@@ -64,7 +64,7 @@ Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE 
 - [x] `GET /satellites/overhead/{country_code}` — first MVP endpoint
 - [x] Redis caching (60 s TTL per country, graceful degradation)
 - [x] Scheduled TLE ingestion (APScheduler, twice daily at 00:00 / 12:00 UTC)
-- [x] Frontend MVP (CesiumJS globe · country click · satellite panel · i18n en/ko)
+- [x] Frontend MVP (Leaflet 2D map · country click · satellite markers · i18n en/ko)
 - [ ] Deployment (Fly.io + Vercel)
 
 ---
