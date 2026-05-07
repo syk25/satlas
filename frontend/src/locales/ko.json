@@ -15,7 +15,16 @@
   },
   "satellite": {
     "norad": "NORAD {{id}}",
-    "unknownOperator": "미상"
+    "unknownOperator": "미상",
+    "orbit": "궤도",
+    "category": "분류",
+    "operator": "운영자",
+    "country": "국가",
+    "track": "위성 추적",
+    "tracking": "추적 중",
+    "trackingHint": "풋프린트와 95분 예측 궤도를 표시합니다.",
+    "stopTracking": "추적 중지",
+    "back": "뒤로"
   },
   "dropdown": {
     "placeholder": "영토 선택",

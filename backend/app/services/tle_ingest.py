@@ -195,6 +195,7 @@ async def get_latest_tle_snapshots(
             & (TleSnapshot.ingested_at == subq.c.max_ingested),
         )
         .where(Satellite.is_active == True)  # noqa: E712
+        .distinct(Satellite.id)
     )
 
     if category is not None:

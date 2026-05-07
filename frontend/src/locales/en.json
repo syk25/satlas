@@ -15,7 +15,16 @@
   },
   "satellite": {
     "norad": "NORAD {{id}}",
-    "unknownOperator": "Unknown"
+    "unknownOperator": "Unknown",
+    "orbit": "Orbit",
+    "category": "Category",
+    "operator": "Operator",
+    "country": "Country",
+    "track": "Track satellite",
+    "tracking": "TRACKING",
+    "trackingHint": "Showing footprint and 95-min ground track.",
+    "stopTracking": "Stop tracking",
+    "back": "Back"
   },
   "dropdown": {
     "placeholder": "Select territory",
