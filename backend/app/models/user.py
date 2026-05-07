@@ -1,9 +1,11 @@
 from datetime import datetime
 
-from sqlalchemy import CHAR, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import CHAR, DateTime, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
+
+_tz = DateTime(timezone=True)
 
 
 class User(Base):
@@ -12,9 +14,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, server_default="now()"
-    )
+    created_at: Mapped[datetime] = mapped_column(_tz, server_default="now()")
 
     oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(back_populates="user")
     passkey_credentials: Mapped[list["PasskeyCredential"]] = relationship(
@@ -37,9 +37,7 @@ class OAuthAccount(Base):
     )
     provider: Mapped[str] = mapped_column(Text, nullable=False)
     provider_user_id: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, server_default="now()"
-    )
+    created_at: Mapped[datetime] = mapped_column(_tz, server_default="now()")
 
     user: Mapped[User] = relationship(back_populates="oauth_accounts")
 
@@ -56,9 +54,7 @@ class PasskeyCredential(Base):
     credential_id: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     public_key: Mapped[str] = mapped_column(Text, nullable=False)
     sign_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, server_default="now()"
-    )
+    created_at: Mapped[datetime] = mapped_column(_tz, server_default="now()")
 
     user: Mapped[User] = relationship(back_populates="passkey_credentials")
 
@@ -71,9 +67,7 @@ class CountryBookmark(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     country_code: Mapped[str] = mapped_column(CHAR(2), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, server_default="now()"
-    )
+    created_at: Mapped[datetime] = mapped_column(_tz, server_default="now()")
 
     user: Mapped[User] = relationship(back_populates="country_bookmarks")
 
@@ -90,9 +84,7 @@ class SatelliteBookmark(Base):
     satellite_id: Mapped[int] = mapped_column(
         ForeignKey("satellites.id", ondelete="CASCADE"), nullable=False
     )
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, server_default="now()"
-    )
+    created_at: Mapped[datetime] = mapped_column(_tz, server_default="now()")
 
     user: Mapped[User] = relationship(back_populates="satellite_bookmarks")
 

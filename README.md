@@ -59,9 +59,9 @@ Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE 
 - [x] Backend scaffold (FastAPI · PostgreSQL · Redis · Docker Compose)
 - [x] Database schema (SQLAlchemy ORM + Alembic migrations)
 - [x] CI/CD pipeline (GitHub Actions, path-based triggers)
-- [ ] TLE ingestion pipeline (CelesTrak + APScheduler)
-- [ ] SGP4-based position calculation and country boundary intersection
-- [ ] REST API MVP endpoints
+- [x] TLE ingestion pipeline (CelesTrak on-demand)
+- [x] SGP4-based position calculation and country boundary intersection
+- [x] `GET /satellites/overhead/{country_code}` — first MVP endpoint
 - [ ] Redis caching
 - [ ] Celery async task queue
 - [ ] Frontend (CesiumJS globe + country selection)

@@ -38,7 +38,7 @@ line-length = 88
 exclude = ["alembic/versions/"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "B", "BLE"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

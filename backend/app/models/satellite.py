@@ -1,7 +1,17 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import CHAR, Boolean, Date, Enum, ForeignKey, Index, Integer, Text
+from sqlalchemy import (
+    CHAR,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
@@ -21,6 +31,9 @@ class OperatorType(enum.Enum):
     INTERNATIONAL = "INTERNATIONAL"
 
 
+_tz = DateTime(timezone=True)
+
+
 class Satellite(Base):
     __tablename__ = "satellites"
 
@@ -37,9 +50,7 @@ class Satellite(Base):
     )
     launch_date: Mapped[date | None] = mapped_column(Date)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, server_default="now()"
-    )
+    created_at: Mapped[datetime] = mapped_column(_tz, server_default="now()")
 
     tle_snapshots: Mapped[list["TleSnapshot"]] = relationship(
         back_populates="satellite"
@@ -59,10 +70,8 @@ class TleSnapshot(Base):
     )
     line1: Mapped[str] = mapped_column(CHAR(69), nullable=False)
     line2: Mapped[str] = mapped_column(CHAR(69), nullable=False)
-    epoch: Mapped[datetime] = mapped_column(nullable=False)
-    ingested_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, server_default="now()"
-    )
+    epoch: Mapped[datetime] = mapped_column(_tz, nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(_tz, server_default="now()")
 
     satellite: Mapped[Satellite] = relationship(back_populates="tle_snapshots")
 
@@ -82,14 +91,14 @@ class PredictedPass(Base):
     tle_snapshot_id: Mapped[int] = mapped_column(
         ForeignKey("tle_snapshots.id"), nullable=False
     )
-    entry_time: Mapped[datetime] = mapped_column(nullable=False)
-    exit_time: Mapped[datetime] = mapped_column(nullable=False)
+    entry_time: Mapped[datetime] = mapped_column(_tz, nullable=False)
+    exit_time: Mapped[datetime] = mapped_column(_tz, nullable=False)
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     entry_lat: Mapped[float | None]
     entry_lon: Mapped[float | None]
     exit_lat: Mapped[float | None]
     exit_lon: Mapped[float | None]
-    predicted_at: Mapped[datetime] = mapped_column(nullable=False)
+    predicted_at: Mapped[datetime] = mapped_column(_tz, nullable=False)
 
     satellite: Mapped[Satellite] = relationship(back_populates="predicted_passes")
 
@@ -110,8 +119,8 @@ class ActualPass(Base):
     tle_snapshot_id: Mapped[int] = mapped_column(
         ForeignKey("tle_snapshots.id"), nullable=False
     )
-    entry_time: Mapped[datetime] = mapped_column(nullable=False)
-    exit_time: Mapped[datetime] = mapped_column(nullable=False)
+    entry_time: Mapped[datetime] = mapped_column(_tz, nullable=False)
+    exit_time: Mapped[datetime] = mapped_column(_tz, nullable=False)
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     entry_lat: Mapped[float | None]
     entry_lon: Mapped[float | None]
