@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   degreesLat,
@@ -298,6 +298,24 @@ export function SatellitePanel({
   onCategoryChange,
 }: Props) {
   const { t } = useTranslation()
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const dragStartY = useRef(0)
+
+  // Auto-expand when content becomes available
+  useEffect(() => {
+    if (countryName || selectedSat || trackedSatellite) setSheetOpen(true)
+  }, [countryName, selectedSat, trackedSatellite])
+
+  function onHandleTouchStart(e: React.TouchEvent) {
+    dragStartY.current = e.touches[0].clientY
+  }
+
+  function onHandleTouchEnd(e: React.TouchEvent) {
+    const dy = dragStartY.current - e.changedTouches[0].clientY
+    if (Math.abs(dy) < 10) setSheetOpen((prev) => !prev)
+    else if (dy > 40) setSheetOpen(true)
+    else if (dy < -40) setSheetOpen(false)
+  }
 
   const categoryOrder = Object.fromEntries(ALL_CATEGORIES.map((c, i) => [c, i]))
 
@@ -392,7 +410,15 @@ export function SatellitePanel({
   }
 
   return (
-    <aside className="panel">
+    <aside className={`panel${sheetOpen ? ' sheet-open' : ''}`}>
+      <div
+        className="panel-handle"
+        onTouchStart={onHandleTouchStart}
+        onTouchEnd={onHandleTouchEnd}
+        onClick={() => setSheetOpen((prev) => !prev)}
+      >
+        <div className="panel-handle-bar" />
+      </div>
       <div className="panel-header">
         {!trackedSatellite && countryName && (
           <h2 className="panel-country">{countryName}</h2>

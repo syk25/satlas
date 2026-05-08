@@ -525,3 +525,60 @@ html, body, #root {
   color: var(--text-secondary);
   text-align: center;
 }
+
+/* ── Panel drag handle (mobile only) ── */
+.panel-handle {
+  display: none;
+}
+
+/* ── Mobile: bottom sheet ── */
+@media (max-width: 768px) {
+  .content {
+    position: relative;
+  }
+
+  .globe-container {
+    height: 100%;
+  }
+
+  .panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 72vh;
+    transform: translateY(calc(100% - 68px));
+    transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: 16px 16px 0 0;
+    z-index: 800;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+  }
+
+  .panel.sheet-open {
+    transform: translateY(0);
+  }
+
+  .panel-handle {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px 0 6px;
+    cursor: grab;
+    touch-action: none;
+    flex-shrink: 0;
+  }
+
+  .panel-handle-bar {
+    width: 36px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+  }
+
+  .panel-body {
+    -webkit-overflow-scrolling: touch;
+  }
+}
