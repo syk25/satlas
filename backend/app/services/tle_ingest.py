@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import math
 from datetime import datetime, timezone
@@ -8,8 +9,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.satellite import OrbitClass, Satellite, SatelliteCategory, TleSnapshot
+from app.services.position import get_position
 
 BASE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle"
+
+POSITIONS_ALL_CACHE_KEY = "satlas:positions:all"
+POSITIONS_ALL_CACHE_TTL = 120  # 60s interval job → always fresh before expiry
 
 # Ordered by priority: specific categories first, OTHER (active) last.
 # If a satellite appears in multiple feeds, the first match wins.
@@ -300,3 +305,51 @@ async def get_latest_tle_snapshots(
 # Legacy shim used by scheduler — kept for backward compat during transition
 async def fetch_and_store_tle(db: AsyncSession, url: str = "") -> int:
     return await refresh_tle(db)
+
+
+async def warm_positions_cache(db: AsyncSession) -> int:
+    """Pre-compute all satellite positions and store in Redis.
+
+    Called every 60 s by the scheduler. The overhead endpoint reads from
+    this cache and runs polygon filtering only, eliminating per-request
+    SGP4 computation in the async event loop.
+    """
+    from app.services.cache import cache_set
+
+    rows = await get_latest_tle_snapshots(db)
+    if not rows:
+        return 0
+
+    now = datetime.now(timezone.utc)
+
+    def _compute() -> list[dict]:
+        result = []
+        for satellite, snapshot in rows:
+            pos = get_position(snapshot.line1.strip(), snapshot.line2.strip(), at=now)
+            if pos is None:
+                continue
+            lat, lon, _ = pos
+            result.append(
+                {
+                    "norad_id": satellite.norad_id,
+                    "name": satellite.name,
+                    "lat": lat,
+                    "lon": lon,
+                    "category": satellite.category.value
+                    if satellite.category
+                    else None,
+                    "orbit_class": (
+                        satellite.orbit_class.value if satellite.orbit_class else None
+                    ),
+                    "line1": snapshot.line1.strip(),
+                    "line2": snapshot.line2.strip(),
+                }
+            )
+        return result
+
+    positions = await asyncio.to_thread(_compute)
+    await cache_set(
+        POSITIONS_ALL_CACHE_KEY, json.dumps(positions), ttl=POSITIONS_ALL_CACHE_TTL
+    )
+    logger.info("warm_positions_cache: cached %d satellite positions", len(positions))
+    return len(positions)
