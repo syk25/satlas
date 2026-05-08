@@ -1,7 +1,10 @@
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from sqlalchemy import func, select
 
 from app.config import settings
@@ -11,6 +14,15 @@ from app.routers import admin, satellites
 from app.services.boundaries import load_country_polygons
 from app.services.cache import close_redis, init_redis
 from app.services.scheduler import start_scheduler, stop_scheduler
+
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+        traces_sample_rate=0.2,
+        environment=settings.environment,
+        send_default_pii=False,
+    )
 
 
 @asynccontextmanager
