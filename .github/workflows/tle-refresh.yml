@@ -21,6 +21,7 @@ jobs:
 
           API_URL = os.environ["API_URL"].rstrip("/")
           ADMIN_TOKEN = os.environ["ADMIN_TOKEN"]
+          UA = "satlas/0.1 (https://github.com/syk25/satlas)"
 
           GROUPS = [
               "stations", "weather", "goes", "military", "amateur",
@@ -28,17 +29,44 @@ jobs:
               "iridium-NEXT", "resource", "planet", "science", "active",
           ]
 
+          # ── SATCAT first: enriches every TLE feed with country/launch/type/RCS ──
+          print("── satcat")
+          try:
+              req = urllib.request.Request(
+                  "https://celestrak.org/pub/satcat.csv",
+                  headers={"User-Agent": UA},
+              )
+              with urllib.request.urlopen(req, timeout=120) as r:
+                  satcat_bytes = r.read()
+              print(f"   fetched {len(satcat_bytes):,} bytes")
+              req2 = urllib.request.Request(
+                  f"{API_URL}/admin/satcat/ingest",
+                  data=satcat_bytes,
+                  method="POST",
+                  headers={
+                      "Authorization": f"Bearer {ADMIN_TOKEN}",
+                      "Content-Type": "text/csv; charset=utf-8",
+                  },
+              )
+              with urllib.request.urlopen(req2, timeout=60) as r:
+                  resp = json.loads(r.read())
+              print(f"   loaded {resp['entries']:,} satcat entries")
+          except Exception as exc:
+              print(f"   ERROR loading SATCAT — {exc}")
+              print("   continuing with TLE feeds; metadata will be NULL")
+
           total, failed = 0, []
 
           for group in GROUPS:
               print(f"── {group}")
 
               # 1. Fetch from CelesTrak (GHA runner IPs are not blocked).
-              # JSON format includes COUNTRY_CODE / LAUNCH_DATE alongside TLE lines.
+              # JSON gives us OMM mean elements; the backend synthesizes TLE
+              # lines and merges in SATCAT metadata.
               try:
                   req = urllib.request.Request(
                       f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=json",
-                      headers={"User-Agent": "satlas/0.1 (https://github.com/syk25/satlas)"},
+                      headers={"User-Agent": UA},
                   )
                   with urllib.request.urlopen(req, timeout=120) as r:
                       payload = r.read()

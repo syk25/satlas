@@ -1,10 +1,15 @@
 import asyncio
+import csv
+import io
 import json
 import logging
 import math
 from datetime import date, datetime, timezone
 from typing import NamedTuple
 
+from sgp4 import omm as sgp4_omm
+from sgp4.api import Satrec
+from sgp4.exporter import export_tle
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,20 +41,33 @@ class TleEntry(NamedTuple):
     rcs_size: RcsSize | None
 
 
+# CelesTrak SATCAT abbreviates these in the OBJECT_TYPE column.
 _OBJECT_TYPE_MAP = {
-    "PAYLOAD": ObjectType.PAYLOAD,
-    "ROCKET BODY": ObjectType.ROCKET_BODY,
-    "DEBRIS": ObjectType.DEBRIS,
-    "UNKNOWN": ObjectType.UNKNOWN,
+    "PAY": ObjectType.PAYLOAD,
+    "R/B": ObjectType.ROCKET_BODY,
+    "DEB": ObjectType.DEBRIS,
     "TBA": ObjectType.UNKNOWN,
+    "UNK": ObjectType.UNKNOWN,
 }
 
-_RCS_SIZE_MAP = {
-    "LARGE": RcsSize.LARGE,
-    "MEDIUM": RcsSize.MEDIUM,
-    "SMALL": RcsSize.SMALL,
-    "UNKNOWN": RcsSize.UNKNOWN,
-}
+
+def _bucket_rcs(value: str | None) -> RcsSize | None:
+    """Convert numeric RCS (m²) from SATCAT to LARGE/MEDIUM/SMALL.
+
+    CelesTrak's bucketing convention: <0.1 = SMALL, 0.1–1.0 = MEDIUM, >1.0 = LARGE.
+    Empty / non-numeric values return None.
+    """
+    if not value or not value.strip():
+        return None
+    try:
+        rcs = float(value)
+    except ValueError:
+        return None
+    if rcs < 0.1:
+        return RcsSize.SMALL
+    if rcs <= 1.0:
+        return RcsSize.MEDIUM
+    return RcsSize.LARGE
 
 
 POSITIONS_ALL_CACHE_KEY = "satlas:positions:all"
@@ -90,22 +108,63 @@ def _parse_launch_date(value: str | None) -> date | None:
         return None
 
 
-def _parse_object_type(value: str | None) -> ObjectType | None:
-    if not value:
-        return None
-    return _OBJECT_TYPE_MAP.get(value.strip().upper())
+# SATCAT enrichment cache (NORAD ID → metadata dict). Populated via
+# /admin/satcat/ingest and consumed during _upsert_entries. Module-level
+# memory is sufficient — on app restart, the next GHA run repopulates it,
+# and DB rows already have the previous values.
+_SATCAT_CACHE: dict[int, dict] = {}
 
 
-def _parse_rcs_size(value: str | None) -> RcsSize | None:
-    if not value:
-        return None
-    return _RCS_SIZE_MAP.get(value.strip().upper())
+def parse_satcat_csv(raw: str) -> dict[int, dict]:
+    """Parse CelesTrak SATCAT CSV into a NORAD ID → metadata dict.
+
+    Columns we read (from satcat.csv header):
+    OBJECT_NAME, OBJECT_ID, NORAD_CAT_ID, OBJECT_TYPE, OPS_STATUS_CODE,
+    OWNER, LAUNCH_DATE, LAUNCH_SITE, DECAY_DATE, ..., RCS, ...
+    """
+    reader = csv.DictReader(io.StringIO(raw))
+    result: dict[int, dict] = {}
+    for row in reader:
+        try:
+            norad_id = int(row.get("NORAD_CAT_ID") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not norad_id:
+            continue
+        result[norad_id] = {
+            "country_code": (row.get("OWNER") or "").strip() or None,
+            "launch_date": _parse_launch_date(row.get("LAUNCH_DATE")),
+            "decay_date": _parse_launch_date(row.get("DECAY_DATE")),
+            "international_designator": (row.get("OBJECT_ID") or "").strip() or None,
+            "object_type": _OBJECT_TYPE_MAP.get(
+                (row.get("OBJECT_TYPE") or "").strip().upper()
+            ),
+            "rcs_size": _bucket_rcs(row.get("RCS")),
+        }
+    return result
 
 
-def _parse_json_entries(raw: str) -> list[TleEntry]:
-    """Parse CelesTrak GP JSON payload into TleEntry tuples.
+def set_satcat_cache(satcat: dict[int, dict]) -> None:
+    """Replace the SATCAT enrichment cache wholesale."""
+    global _SATCAT_CACHE
+    _SATCAT_CACHE = satcat
+    logger.info("SATCAT cache updated: %d entries", len(satcat))
 
-    Skips entries without complete TLE lines so downstream SGP4 calls don't fail.
+
+def get_satcat_size() -> int:
+    return len(_SATCAT_CACHE)
+
+
+def _parse_omm_entries(raw: str) -> list[TleEntry]:
+    """Parse CelesTrak GP JSON (OMM mean-elements) into TleEntry tuples.
+
+    GP JSON does not include TLE lines, only mean elements. We synthesize
+    line1/line2 via sgp4's exporter so downstream code (DB, frontend
+    satellite.js) keeps working with TLE strings unchanged.
+
+    GP JSON also does not include COUNTRY_CODE / LAUNCH_DATE / OBJECT_TYPE /
+    RCS_SIZE — those fields are populated from the SATCAT cache by
+    _upsert_entries, keyed on NORAD ID.
     """
     try:
         items = json.loads(raw)
@@ -116,24 +175,33 @@ def _parse_json_entries(raw: str) -> list[TleEntry]:
 
     entries: list[TleEntry] = []
     for item in items:
-        line1 = item.get("TLE_LINE1")
-        line2 = item.get("TLE_LINE2")
         name = item.get("OBJECT_NAME")
-        if not (line1 and line2 and name):
+        if not name or item.get("NORAD_CAT_ID") is None:
             continue
-        if not (line1.startswith("1 ") and line2.startswith("2 ")):
+        try:
+            sat = Satrec()
+            sgp4_omm.initialize(sat, item)
+            line1, line2 = export_tle(sat)
+        except (ValueError, KeyError, TypeError) as exc:
+            logger.debug(
+                "OMM→TLE export failed for %s (%s): %s",
+                name,
+                item.get("NORAD_CAT_ID"),
+                exc,
+            )
             continue
         entries.append(
             TleEntry(
                 name=name.strip(),
                 line1=line1,
                 line2=line2,
-                country_code=(item.get("COUNTRY_CODE") or None),
-                launch_date=_parse_launch_date(item.get("LAUNCH_DATE")),
-                decay_date=_parse_launch_date(item.get("DECAY_DATE")),
+                # Metadata from SATCAT, applied during upsert.
+                country_code=None,
+                launch_date=None,
+                decay_date=None,
                 international_designator=(item.get("OBJECT_ID") or None),
-                object_type=_parse_object_type(item.get("OBJECT_TYPE")),
-                rcs_size=_parse_rcs_size(item.get("RCS_SIZE")),
+                object_type=None,
+                rcs_size=None,
             )
         )
     return entries
@@ -201,7 +269,7 @@ async def _fetch_raw(group: str) -> list[TleEntry]:
             if status not in (200, 403):
                 logger.warning("%s: unexpected status %d", group, status)
                 return []
-            entries = _parse_json_entries(body)
+            entries = _parse_omm_entries(body)
             if not entries:
                 logger.warning(
                     "%s: status=%d but no entries parsed. body[:200]=%r",
@@ -234,6 +302,11 @@ async def _upsert_entries(
     tle_meta: list[tuple[int, str, str, datetime]] = []
     for entry in entries:
         norad_id = int(entry.line2[2:7])
+        # SATCAT carries the human metadata; OMM only gives us OBJECT_ID.
+        # Fall back to OMM's OBJECT_ID for the international designator if
+        # SATCAT doesn't have an entry (rare, but possible for newly-launched
+        # objects that show up in gp.php before the next satcat refresh).
+        sc = _SATCAT_CACHE.get(norad_id, {})
         sat_rows.append(
             {
                 "norad_id": norad_id,
@@ -241,12 +314,14 @@ async def _upsert_entries(
                 "is_active": True,
                 "category": category,
                 "orbit_class": orbit_class_from_tle(entry.line2),
-                "operator_country": entry.country_code,
-                "launch_date": entry.launch_date,
-                "decay_date": entry.decay_date,
-                "international_designator": entry.international_designator,
-                "object_type": entry.object_type,
-                "rcs_size": entry.rcs_size,
+                "operator_country": sc.get("country_code"),
+                "launch_date": sc.get("launch_date"),
+                "decay_date": sc.get("decay_date"),
+                "international_designator": (
+                    sc.get("international_designator") or entry.international_designator
+                ),
+                "object_type": sc.get("object_type"),
+                "rcs_size": sc.get("rcs_size"),
             }
         )
         tle_meta.append((norad_id, entry.line1, entry.line2, _parse_epoch(entry.line1)))
@@ -300,20 +375,26 @@ _GROUP_TO_CATEGORY: dict[str, SatelliteCategory] = dict(CATEGORY_FEEDS)
 
 
 async def ingest_feed(db: AsyncSession, group: str, raw_json: str) -> int:
-    """Parse CelesTrak GP JSON pushed from GitHub Actions and upsert to DB.
+    """Parse CelesTrak GP JSON (OMM) pushed from GitHub Actions and upsert.
 
     Called by the admin endpoint; decouples CelesTrak fetching from the server
     so GitHub Actions runners (non-datacenter IPs) can pull the data instead.
+    SATCAT enrichment uses the in-memory cache populated by /admin/satcat/ingest.
     Returns number of satellites processed.
     """
     category = _GROUP_TO_CATEGORY.get(group)
     if category is None:
         raise ValueError(f"Unknown TLE group: {group!r}")
-    entries = _parse_json_entries(raw_json)
+    entries = _parse_omm_entries(raw_json)
     if not entries:
         logger.warning("ingest_feed: no entries in payload for group=%s", group)
         return 0
-    logger.info("ingest_feed: %s: %d entries received", group, len(entries))
+    logger.info(
+        "ingest_feed: %s: %d entries received (satcat cache: %d)",
+        group,
+        len(entries),
+        len(_SATCAT_CACHE),
+    )
     now = datetime.now(timezone.utc)
     count = await _upsert_entries(db, entries, category, now)
     logger.info("ingest_feed: %s: committed %d satellites", group, count)
