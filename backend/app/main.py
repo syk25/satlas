@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.satellite import Satellite
-from app.routers import satellites
+from app.routers import admin, satellites
 from app.services.boundaries import load_country_polygons
 from app.services.cache import close_redis, init_redis
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -36,6 +36,7 @@ app.add_middleware(
 )
 
 app.include_router(satellites.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

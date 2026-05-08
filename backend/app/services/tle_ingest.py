@@ -133,12 +133,101 @@ async def _fetch_raw(group: str) -> list[tuple[str, str, str]]:
     return []
 
 
+async def _upsert_blocks(
+    db: AsyncSession,
+    blocks: list[tuple[str, str, str]],
+    category: SatelliteCategory,
+    now: datetime,
+) -> int:
+    """Bulk-upsert one feed's TLE blocks into the DB. Returns satellite count."""
+    sat_rows = []
+    tle_meta: list[tuple[int, str, str, datetime]] = []
+    for name, line1, line2 in blocks:
+        norad_id = int(line2[2:7])
+        sat_rows.append(
+            {
+                "norad_id": norad_id,
+                "name": name,
+                "is_active": True,
+                "category": category,
+                "orbit_class": orbit_class_from_tle(line2),
+            }
+        )
+        tle_meta.append((norad_id, line1, line2, _parse_epoch(line1)))
+
+    norad_to_id: dict[int, int] = {}
+    for i in range(0, len(sat_rows), _BATCH):
+        chunk = sat_rows[i : i + _BATCH]
+        ins = pg_insert(Satellite).values(chunk)
+        if category == SatelliteCategory.OTHER:
+            stmt = ins.on_conflict_do_update(
+                index_elements=["norad_id"],
+                set_={
+                    "name": ins.excluded.name,
+                    "orbit_class": ins.excluded.orbit_class,
+                },
+            )
+        else:
+            stmt = ins.on_conflict_do_update(
+                index_elements=["norad_id"],
+                set_={
+                    "name": ins.excluded.name,
+                    "category": ins.excluded.category,
+                    "orbit_class": ins.excluded.orbit_class,
+                },
+            )
+        result = await db.execute(stmt.returning(Satellite.norad_id, Satellite.id))
+        for row in result:
+            norad_to_id[row.norad_id] = row.id
+
+    snap_rows = [
+        {
+            "satellite_id": norad_to_id[norad_id],
+            "line1": line1,
+            "line2": line2,
+            "epoch": epoch,
+            "ingested_at": now,
+        }
+        for norad_id, line1, line2, epoch in tle_meta
+        if norad_id in norad_to_id
+    ]
+    for i in range(0, len(snap_rows), _BATCH):
+        await db.execute(pg_insert(TleSnapshot).values(snap_rows[i : i + _BATCH]))
+
+    await db.commit()
+    return len(sat_rows)
+
+
+_GROUP_TO_CATEGORY: dict[str, SatelliteCategory] = dict(CATEGORY_FEEDS)
+
+
+async def ingest_feed(db: AsyncSession, group: str, raw_tle: str) -> int:
+    """Parse raw TLE text pushed from GitHub Actions and upsert to DB.
+
+    Called by the admin endpoint; decouples CelesTrak fetching from the server
+    so GitHub Actions runners (non-datacenter IPs) can pull the data instead.
+    Returns number of satellites processed.
+    """
+    category = _GROUP_TO_CATEGORY.get(group)
+    if category is None:
+        raise ValueError(f"Unknown TLE group: {group!r}")
+    blocks = _parse_tle_blocks(raw_tle)
+    if not blocks:
+        logger.warning("ingest_feed: no TLE blocks in payload for group=%s", group)
+        return 0
+    logger.info("ingest_feed: %s: %d blocks received", group, len(blocks))
+    now = datetime.now(timezone.utc)
+    count = await _upsert_blocks(db, blocks, category, now)
+    logger.info("ingest_feed: %s: committed %d satellites", group, count)
+    return count
+
+
 async def refresh_tle(db: AsyncSession) -> int:
     """Fetch all category feeds and upsert satellites with category + orbit_class.
 
     Priority: specific category feeds are processed first. The `active` (OTHER)
     feed runs last so it never overwrites a more specific category already set.
-    Returns total number of TLE snapshots stored.
+    Returns total number of satellites stored.
     """
     now = datetime.now(timezone.utc)
     total = 0
@@ -151,82 +240,20 @@ async def refresh_tle(db: AsyncSession) -> int:
             logger.warning("[%d/%d] feed empty or failed: %s", idx, feed_count, group)
             continue
         logger.info(
-            "[%d/%d] %s: %d TLE blocks received",
-            idx,
-            feed_count,
-            group,
-            len(blocks),
+            "[%d/%d] %s: %d TLE blocks received", idx, feed_count, group, len(blocks)
         )
 
-        # Parse all blocks upfront
-        sat_rows = []
-        tle_meta: list[tuple[int, str, str, datetime]] = []
-        for name, line1, line2 in blocks:
-            norad_id = int(line2[2:7])
-            sat_rows.append(
-                {
-                    "norad_id": norad_id,
-                    "name": name,
-                    "is_active": True,
-                    "category": category,
-                    "orbit_class": orbit_class_from_tle(line2),
-                }
-            )
-            tle_meta.append((norad_id, line1, line2, _parse_epoch(line1)))
-
-        # Bulk UPSERT satellites in chunks (pg 65535-param limit)
-        norad_to_id: dict[int, int] = {}
-        for i in range(0, len(sat_rows), _BATCH):
-            chunk = sat_rows[i : i + _BATCH]
-            ins = pg_insert(Satellite).values(chunk)
-            if category == SatelliteCategory.OTHER:
-                stmt = ins.on_conflict_do_update(
-                    index_elements=["norad_id"],
-                    set_={
-                        "name": ins.excluded.name,
-                        "orbit_class": ins.excluded.orbit_class,
-                    },
-                )
-            else:
-                stmt = ins.on_conflict_do_update(
-                    index_elements=["norad_id"],
-                    set_={
-                        "name": ins.excluded.name,
-                        "category": ins.excluded.category,
-                        "orbit_class": ins.excluded.orbit_class,
-                    },
-                )
-            result = await db.execute(stmt.returning(Satellite.norad_id, Satellite.id))
-            for row in result:
-                norad_to_id[row.norad_id] = row.id
-
-        # Bulk insert TLE snapshots in chunks
-        snap_rows = [
-            {
-                "satellite_id": norad_to_id[norad_id],
-                "line1": line1,
-                "line2": line2,
-                "epoch": epoch,
-                "ingested_at": now,
-            }
-            for norad_id, line1, line2, epoch in tle_meta
-            if norad_id in norad_to_id
-        ]
-        for i in range(0, len(snap_rows), _BATCH):
-            await db.execute(pg_insert(TleSnapshot).values(snap_rows[i : i + _BATCH]))
-
-        await db.commit()
-        total += len(sat_rows)
+        count = await _upsert_blocks(db, blocks, category, now)
+        total += count
         logger.info(
             "[%d/%d] %s: committed %d satellites, running total=%d",
             idx,
             feed_count,
             group,
-            len(sat_rows),
+            count,
             total,
         )
 
-        # Polite delay — datacenter IPs are rate-limited more aggressively
         await asyncio.sleep(5)
 
     return total
