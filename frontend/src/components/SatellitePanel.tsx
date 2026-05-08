@@ -120,16 +120,16 @@ function SatelliteDetail({
             <CategoryBadge category={sat.category} />
           </div>
         )}
-        {sat.operator_name && (
+        {sat.operator && (
           <div className="sat-detail-row">
             <span className="sat-detail-label">{t('satellite.operator')}</span>
-            <span className="sat-detail-value">{sat.operator_name}</span>
+            <span className="sat-detail-value">{sat.operator}</span>
           </div>
         )}
-        {sat.operator_country && (
+        {sat.operator_name && (
           <div className="sat-detail-row">
-            <span className="sat-detail-label">{t('satellite.country')}</span>
-            <span className="sat-detail-value">{sat.operator_country}</span>
+            <span className="sat-detail-label">{t('satellite.operatorName')}</span>
+            <span className="sat-detail-value">{sat.operator_name}</span>
           </div>
         )}
         {sat.launch_date && (
@@ -245,6 +245,52 @@ function TrackingView({
             <CategoryBadge category={sat.category} />
           </div>
         )}
+        {sat.operator && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.operator')}</span>
+            <span className="sat-detail-value">{sat.operator}</span>
+          </div>
+        )}
+        {sat.operator_name && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.operatorName')}</span>
+            <span className="sat-detail-value">{sat.operator_name}</span>
+          </div>
+        )}
+        {sat.launch_date && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.launchDate')}</span>
+            <span className="sat-detail-value">{sat.launch_date}</span>
+          </div>
+        )}
+        {sat.decay_date && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.decayDate')}</span>
+            <span className="sat-detail-value">{sat.decay_date}</span>
+          </div>
+        )}
+        {sat.international_designator && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.designator')}</span>
+            <span className="sat-detail-value">{sat.international_designator}</span>
+          </div>
+        )}
+        {sat.object_type && sat.object_type !== 'PAYLOAD' && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.objectType')}</span>
+            <span className="sat-detail-value">
+              {t(`satellite.objectTypes.${sat.object_type}`)}
+            </span>
+          </div>
+        )}
+        {sat.rcs_size && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.rcsSize')}</span>
+            <span className="sat-detail-value">
+              {t(`satellite.rcsSizes.${sat.rcs_size}`)}
+            </span>
+          </div>
+        )}
         {offMapDir ? (
           <p className="sat-offmap-warning">{t(`satellite.offMap.${offMapDir}`)}</p>
         ) : (
@@ -298,9 +344,7 @@ function SatelliteItem({
       <div className="sat-meta">
         <span>{t('satellite.norad', { id: sat.norad_id })}</span>
         {sat.orbit_class && <span className="sat-orbit-inline">{sat.orbit_class}</span>}
-        {sat.operator_country && (
-          <span className="sat-country">{sat.operator_country}</span>
-        )}
+        {sat.operator && <span className="sat-country">{sat.operator}</span>}
       </div>
       <CategoryBadge category={sat.category} />
     </button>

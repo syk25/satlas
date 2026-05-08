@@ -20,7 +20,7 @@
     "orbit": "궤도",
     "category": "분류",
     "operator": "운영자",
-    "country": "국가",
+    "operatorName": "운영자명",
     "launchDate": "발사일",
     "decayDate": "소멸일",
     "designator": "국제 식별자",

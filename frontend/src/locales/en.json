@@ -20,7 +20,7 @@
     "orbit": "Orbit",
     "category": "Category",
     "operator": "Operator",
-    "country": "Country",
+    "operatorName": "Operator name",
     "launchDate": "Launch date",
     "decayDate": "Decay date",
     "designator": "Intl. designator",

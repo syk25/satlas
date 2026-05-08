@@ -28,17 +28,16 @@ BASE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=jso
 
 
 class TleEntry(NamedTuple):
-    """One satellite parsed from a CelesTrak JSON feed."""
+    """One satellite parsed from a CelesTrak JSON feed.
+
+    GP JSON only carries the OBJECT_ID (international designator). The rest
+    of the human metadata is filled from SATCAT during _upsert_entries.
+    """
 
     name: str
     line1: str
     line2: str
-    country_code: str | None
-    launch_date: date | None
-    decay_date: date | None
     international_designator: str | None
-    object_type: ObjectType | None
-    rcs_size: RcsSize | None
 
 
 # CelesTrak SATCAT abbreviates these in the OBJECT_TYPE column.
@@ -132,7 +131,9 @@ def parse_satcat_csv(raw: str) -> dict[int, dict]:
         if not norad_id:
             continue
         result[norad_id] = {
-            "country_code": (row.get("OWNER") or "").strip() or None,
+            # SATCAT OWNER holds country codes (US, PRC) AND org codes
+            # (INTELSAT, PLAN, SES) — semantically "operator".
+            "operator": (row.get("OWNER") or "").strip() or None,
             "launch_date": _parse_launch_date(row.get("LAUNCH_DATE")),
             "decay_date": _parse_launch_date(row.get("DECAY_DATE")),
             "international_designator": (row.get("OBJECT_ID") or "").strip() or None,
@@ -195,13 +196,7 @@ def _parse_omm_entries(raw: str) -> list[TleEntry]:
                 name=name.strip(),
                 line1=line1,
                 line2=line2,
-                # Metadata from SATCAT, applied during upsert.
-                country_code=None,
-                launch_date=None,
-                decay_date=None,
                 international_designator=(item.get("OBJECT_ID") or None),
-                object_type=None,
-                rcs_size=None,
             )
         )
     return entries
@@ -314,7 +309,7 @@ async def _upsert_entries(
                 "is_active": True,
                 "category": category,
                 "orbit_class": orbit_class_from_tle(entry.line2),
-                "operator_country": sc.get("country_code"),
+                "operator": sc.get("operator"),
                 "launch_date": sc.get("launch_date"),
                 "decay_date": sc.get("decay_date"),
                 "international_designator": (
@@ -336,7 +331,7 @@ async def _upsert_entries(
         update_set = {
             "name": ins.excluded.name,
             "orbit_class": ins.excluded.orbit_class,
-            "operator_country": ins.excluded.operator_country,
+            "operator": ins.excluded.operator,
             "launch_date": ins.excluded.launch_date,
             "decay_date": ins.excluded.decay_date,
             "international_designator": ins.excluded.international_designator,
@@ -503,7 +498,7 @@ async def _fetch_position_rows(db: AsyncSession) -> list[tuple]:
             Satellite.name,
             Satellite.category,
             Satellite.orbit_class,
-            Satellite.operator_country,
+            Satellite.operator,
             Satellite.launch_date,
             Satellite.decay_date,
             Satellite.international_designator,
@@ -547,7 +542,7 @@ async def warm_positions_cache(db: AsyncSession) -> int:
             name,
             category,
             orbit_class,
-            operator_country,
+            operator,
             launch_date,
             decay_date,
             international_designator,
@@ -568,7 +563,7 @@ async def warm_positions_cache(db: AsyncSession) -> int:
                     "lon": lon,
                     "category": category.value if category else None,
                     "orbit_class": orbit_class.value if orbit_class else None,
-                    "operator_country": operator_country,
+                    "operator": operator,
                     "launch_date": launch_date.isoformat() if launch_date else None,
                     "decay_date": decay_date.isoformat() if decay_date else None,
                     "international_designator": international_designator,

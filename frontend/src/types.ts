@@ -32,7 +32,7 @@ export interface SatelliteOverhead {
   norad_id: number
   name: string
   category: SatelliteCategory | null
-  operator_country: string | null
+  operator: string | null
   operator_name: string | null
   operator_type: string | null
   orbit_class: string | null
