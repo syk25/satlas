@@ -9,6 +9,11 @@ venv/
 .venv/
 env/
 
+# Local-only dependency lock — CI/Dockerfile resolve from pyproject.toml directly,
+# so the lock would not be consumed even if committed. Revisit when introducing
+# `uv sync --frozen` to the build pipeline.
+backend/uv.lock
+
 # Environment
 .env
 .env.*
