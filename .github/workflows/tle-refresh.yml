@@ -16,75 +16,69 @@ jobs:
           API_URL: ${{ secrets.SATLAS_API_URL }}
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          set -euo pipefail
+          python3 << 'EOF'
+          import json, os, sys, time, urllib.request
 
-          # Group name → must match CATEGORY_FEEDS keys in tle_ingest.py
-          GROUPS=(
-            stations
-            weather
-            goes
-            military
-            amateur
-            gps-ops
-            glo-ops
-            galileo
-            beidou
-            oneweb
-            iridium-NEXT
-            resource
-            planet
-            science
-            active
-          )
+          API_URL = os.environ["API_URL"].rstrip("/")
+          ADMIN_TOKEN = os.environ["ADMIN_TOKEN"]
 
-          TOTAL=0
-          FAILED=()
+          GROUPS = [
+              "stations", "weather", "goes", "military", "amateur",
+              "gps-ops", "glo-ops", "galileo", "beidou", "oneweb",
+              "iridium-NEXT", "resource", "planet", "science", "active",
+          ]
 
-          for GROUP in "${GROUPS[@]}"; do
-            echo "── $GROUP"
+          total, failed = 0, []
 
-            TLE=$(curl -sf \
-              --max-time 120 \
-              -H "User-Agent: satlas/0.1 (https://github.com/syk25/satlas)" \
-              "https://celestrak.org/NORAD/elements/gp.php?GROUP=${GROUP}&FORMAT=tle" \
-              || true)
+          for group in GROUPS:
+              print(f"── {group}")
 
-            if [ -z "$TLE" ] || echo "$TLE" | grep -q "not found"; then
-              echo "   skip: empty or invalid response"
-              FAILED+=("$GROUP")
-              continue
-            fi
+              # 1. Fetch from CelesTrak (GHA runner IPs are not blocked)
+              try:
+                  req = urllib.request.Request(
+                      f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle",
+                      headers={"User-Agent": "satlas/0.1 (https://github.com/syk25/satlas)"},
+                  )
+                  with urllib.request.urlopen(req, timeout=120) as r:
+                      tle_bytes = r.read()
+              except Exception as exc:
+                  print(f"   skip: fetch error — {exc}")
+                  failed.append(group)
+                  continue
 
-            LINES=$(echo "$TLE" | wc -l)
-            echo "   fetched ${LINES} lines"
+              if not tle_bytes.strip() or b"not found" in tle_bytes.lower():
+                  print(f"   skip: empty or invalid response")
+                  failed.append(group)
+                  continue
 
-            RESPONSE=$(echo "$TLE" | curl -s \
-              --max-time 60 \
-              -o /tmp/resp.json \
-              -w "%{http_code}" \
-              -X POST \
-              -H "Authorization: Bearer $ADMIN_TOKEN" \
-              -H "Content-Type: text/plain; charset=utf-8" \
-              --data-binary @- \
-              "${API_URL}/admin/tle/ingest/${GROUP}")
+              print(f"   fetched {len(tle_bytes):,} bytes")
 
-            if [ "$RESPONSE" = "200" ]; then
-              COUNT=$(cat /tmp/resp.json | python3 -c "import sys,json; print(json.load(sys.stdin)['satellites'])")
-              echo "   committed ${COUNT} satellites"
-              TOTAL=$((TOTAL + COUNT))
-            else
-              echo "   ERROR HTTP ${RESPONSE}: $(cat /tmp/resp.json)"
-              FAILED+=("$GROUP")
-            fi
+              # 2. Push to Satlas API
+              try:
+                  req2 = urllib.request.Request(
+                      f"{API_URL}/admin/tle/ingest/{group}",
+                      data=tle_bytes,
+                      method="POST",
+                      headers={
+                          "Authorization": f"Bearer {ADMIN_TOKEN}",
+                          "Content-Type": "text/plain; charset=utf-8",
+                      },
+                  )
+                  with urllib.request.urlopen(req2, timeout=60) as r:
+                      body = json.loads(r.read())
+                  count = body["satellites"]
+                  print(f"   committed {count:,} satellites")
+                  total += count
+              except Exception as exc:
+                  print(f"   ERROR pushing to API — {exc}")
+                  failed.append(group)
 
-            sleep 3
-          done
+              time.sleep(3)
 
-          echo ""
-          echo "════════════════════════════════"
-          echo "Total satellites committed: ${TOTAL}"
+          print(f"\n{'═' * 40}")
+          print(f"Total satellites committed: {total:,}")
 
-          if [ ${#FAILED[@]} -gt 0 ]; then
-            echo "Failed feeds: ${FAILED[*]}"
-            exit 1
-          fi
+          if failed:
+              print(f"Failed feeds: {', '.join(failed)}")
+              sys.exit(1)
+          EOF
