@@ -1,3 +1,4 @@
+import logging as _logging
 from contextlib import asynccontextmanager
 
 import sentry_sdk
@@ -15,6 +16,8 @@ from app.services.boundaries import load_country_polygons
 from app.services.cache import close_redis, init_redis
 from app.services.scheduler import start_scheduler, stop_scheduler
 
+_startup_log = _logging.getLogger(__name__)
+
 if settings.sentry_dsn:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
@@ -23,6 +26,9 @@ if settings.sentry_dsn:
         environment=settings.environment,
         send_default_pii=False,
     )
+    _startup_log.info("Sentry initialized (environment=%s)", settings.environment)
+else:
+    _startup_log.warning("SENTRY_DSN not configured — Sentry disabled")
 
 
 @asynccontextmanager
