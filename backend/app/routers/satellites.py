@@ -32,6 +32,10 @@ class SatelliteOverhead(BaseModel):
     operator_type: str | None
     orbit_class: str | None
     launch_date: str | None
+    decay_date: str | None
+    international_designator: str | None
+    object_type: str | None
+    rcs_size: str | None
     line1: str
     line2: str
     entry_time: datetime
@@ -41,7 +45,14 @@ class SatelliteOverhead(BaseModel):
 async def get_overhead(
     country_code: str,
     category: str | None = None,
+    include_inactive: bool = False,
 ) -> list[SatelliteOverhead]:
+    """Satellites currently over the given country.
+
+    By default returns only PAYLOAD object types — actual operating satellites.
+    Set `include_inactive=true` to also include rocket bodies, debris, and
+    unclassified objects (~half of the active catalog).
+    """
     cc = country_code.upper()
 
     if not boundaries.country_exists(cc):
@@ -56,7 +67,11 @@ async def get_overhead(
                 status_code=400, detail=f"Unknown category '{category}'."
             ) from e
 
-    cache_key = f"satlas:overhead:{cc}" + (f":{category}" if category else "")
+    cache_key = (
+        f"satlas:overhead:{cc}"
+        + (f":{category}" if category else "")
+        + (":all" if include_inactive else "")
+    )
     cached = await cache.cache_get(cache_key)
     if cached is not None:
         return [SatelliteOverhead(**item) for item in json.loads(cached)]
@@ -69,6 +84,13 @@ async def get_overhead(
         )
 
     all_positions: list[dict] = json.loads(all_json)
+    if not include_inactive:
+        # Default view: only real operating satellites. Treat NULL object_type
+        # as PAYLOAD so legacy rows aren't hidden until the next ingest cycle
+        # backfills them.
+        all_positions = [
+            p for p in all_positions if p.get("object_type") in (None, "PAYLOAD")
+        ]
     if cat_filter_value:
         all_positions = [
             p for p in all_positions if p.get("category") == cat_filter_value
@@ -90,6 +112,10 @@ async def get_overhead(
                         operator_type=None,
                         orbit_class=p["orbit_class"],
                         launch_date=p.get("launch_date"),
+                        decay_date=p.get("decay_date"),
+                        international_designator=p.get("international_designator"),
+                        object_type=p.get("object_type"),
+                        rcs_size=p.get("rcs_size"),
                         line1=p["line1"],
                         line2=p["line2"],
                         entry_time=now,
@@ -109,8 +135,15 @@ async def get_overhead(
 
 
 @router.get("/positions", response_model=list[SatellitePosition])
-async def get_positions() -> list[SatellitePosition]:
-    cached = await cache.cache_get(POSITIONS_CACHE_KEY)
+async def get_positions(include_inactive: bool = False) -> list[SatellitePosition]:
+    """All satellite positions for the global map view.
+
+    Defaults to PAYLOAD only so the map shows operating satellites, not debris.
+    """
+    # NB: avoid suffix `:all` here — it collides with POSITIONS_ALL_CACHE_KEY,
+    # the master cache that this endpoint reads from.
+    cache_key = POSITIONS_CACHE_KEY + (":full" if include_inactive else "")
+    cached = await cache.cache_get(cache_key)
     if cached is not None:
         return [SatellitePosition(**item) for item in json.loads(cached)]
 
@@ -122,6 +155,10 @@ async def get_positions() -> list[SatellitePosition]:
         )
 
     all_positions: list[dict] = json.loads(all_json)
+    if not include_inactive:
+        all_positions = [
+            p for p in all_positions if p.get("object_type") in (None, "PAYLOAD")
+        ]
     result = [
         SatellitePosition(
             norad_id=p["norad_id"],
@@ -133,7 +170,7 @@ async def get_positions() -> list[SatellitePosition]:
     ]
 
     await cache.cache_set(
-        POSITIONS_CACHE_KEY,
+        cache_key,
         json.dumps([item.model_dump() for item in result]),
         ttl=POSITIONS_CACHE_TTL,
     )

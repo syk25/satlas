@@ -9,7 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.satellite import OrbitClass, Satellite, SatelliteCategory, TleSnapshot
+from app.models.satellite import (
+    ObjectType,
+    OrbitClass,
+    RcsSize,
+    Satellite,
+    SatelliteCategory,
+    TleSnapshot,
+)
 from app.services.position import get_position
 
 BASE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=json"
@@ -23,6 +30,26 @@ class TleEntry(NamedTuple):
     line2: str
     country_code: str | None
     launch_date: date | None
+    decay_date: date | None
+    international_designator: str | None
+    object_type: ObjectType | None
+    rcs_size: RcsSize | None
+
+
+_OBJECT_TYPE_MAP = {
+    "PAYLOAD": ObjectType.PAYLOAD,
+    "ROCKET BODY": ObjectType.ROCKET_BODY,
+    "DEBRIS": ObjectType.DEBRIS,
+    "UNKNOWN": ObjectType.UNKNOWN,
+    "TBA": ObjectType.UNKNOWN,
+}
+
+_RCS_SIZE_MAP = {
+    "LARGE": RcsSize.LARGE,
+    "MEDIUM": RcsSize.MEDIUM,
+    "SMALL": RcsSize.SMALL,
+    "UNKNOWN": RcsSize.UNKNOWN,
+}
 
 
 POSITIONS_ALL_CACHE_KEY = "satlas:positions:all"
@@ -63,6 +90,18 @@ def _parse_launch_date(value: str | None) -> date | None:
         return None
 
 
+def _parse_object_type(value: str | None) -> ObjectType | None:
+    if not value:
+        return None
+    return _OBJECT_TYPE_MAP.get(value.strip().upper())
+
+
+def _parse_rcs_size(value: str | None) -> RcsSize | None:
+    if not value:
+        return None
+    return _RCS_SIZE_MAP.get(value.strip().upper())
+
+
 def _parse_json_entries(raw: str) -> list[TleEntry]:
     """Parse CelesTrak GP JSON payload into TleEntry tuples.
 
@@ -91,6 +130,10 @@ def _parse_json_entries(raw: str) -> list[TleEntry]:
                 line2=line2,
                 country_code=(item.get("COUNTRY_CODE") or None),
                 launch_date=_parse_launch_date(item.get("LAUNCH_DATE")),
+                decay_date=_parse_launch_date(item.get("DECAY_DATE")),
+                international_designator=(item.get("OBJECT_ID") or None),
+                object_type=_parse_object_type(item.get("OBJECT_TYPE")),
+                rcs_size=_parse_rcs_size(item.get("RCS_SIZE")),
             )
         )
     return entries
@@ -200,6 +243,10 @@ async def _upsert_entries(
                 "orbit_class": orbit_class_from_tle(entry.line2),
                 "operator_country": entry.country_code,
                 "launch_date": entry.launch_date,
+                "decay_date": entry.decay_date,
+                "international_designator": entry.international_designator,
+                "object_type": entry.object_type,
+                "rcs_size": entry.rcs_size,
             }
         )
         tle_meta.append((norad_id, entry.line1, entry.line2, _parse_epoch(entry.line1)))
@@ -208,7 +255,7 @@ async def _upsert_entries(
     for i in range(0, len(sat_rows), _BATCH):
         chunk = sat_rows[i : i + _BATCH]
         ins = pg_insert(Satellite).values(chunk)
-        # Always overwrite operator_country / launch_date — CelesTrak is canonical.
+        # CelesTrak is canonical for these metadata fields — always overwrite.
         # Category is held back on the OTHER (catch-all) feed so a more specific
         # earlier feed doesn't lose its label.
         update_set = {
@@ -216,6 +263,10 @@ async def _upsert_entries(
             "orbit_class": ins.excluded.orbit_class,
             "operator_country": ins.excluded.operator_country,
             "launch_date": ins.excluded.launch_date,
+            "decay_date": ins.excluded.decay_date,
+            "international_designator": ins.excluded.international_designator,
+            "object_type": ins.excluded.object_type,
+            "rcs_size": ins.excluded.rcs_size,
         }
         if category != SatelliteCategory.OTHER:
             update_set["category"] = ins.excluded.category
@@ -373,6 +424,10 @@ async def _fetch_position_rows(db: AsyncSession) -> list[tuple]:
             Satellite.orbit_class,
             Satellite.operator_country,
             Satellite.launch_date,
+            Satellite.decay_date,
+            Satellite.international_designator,
+            Satellite.object_type,
+            Satellite.rcs_size,
             TleSnapshot.line1,
             TleSnapshot.line2,
         )
@@ -413,6 +468,10 @@ async def warm_positions_cache(db: AsyncSession) -> int:
             orbit_class,
             operator_country,
             launch_date,
+            decay_date,
+            international_designator,
+            object_type,
+            rcs_size,
             line1,
             line2,
         ) in rows:
@@ -430,6 +489,10 @@ async def warm_positions_cache(db: AsyncSession) -> int:
                     "orbit_class": orbit_class.value if orbit_class else None,
                     "operator_country": operator_country,
                     "launch_date": launch_date.isoformat() if launch_date else None,
+                    "decay_date": decay_date.isoformat() if decay_date else None,
+                    "international_designator": international_designator,
+                    "object_type": object_type.value if object_type else None,
+                    "rcs_size": rcs_size.value if rcs_size else None,
                     "line1": line1.strip(),
                     "line2": line2.strip(),
                 }

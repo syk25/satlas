@@ -31,6 +31,20 @@ class OperatorType(enum.Enum):
     INTERNATIONAL = "INTERNATIONAL"
 
 
+class ObjectType(enum.Enum):
+    PAYLOAD = "PAYLOAD"
+    ROCKET_BODY = "ROCKET_BODY"
+    DEBRIS = "DEBRIS"
+    UNKNOWN = "UNKNOWN"
+
+
+class RcsSize(enum.Enum):
+    LARGE = "LARGE"
+    MEDIUM = "MEDIUM"
+    SMALL = "SMALL"
+    UNKNOWN = "UNKNOWN"
+
+
 class SatelliteCategory(enum.Enum):
     STATION = "STATION"  # ISS, Tiangong
     WEATHER = "WEATHER"  # NOAA, Meteosat, GOES
@@ -61,6 +75,12 @@ class Satellite(Base):
         Enum(OrbitClass, name="orbit_class_type")
     )
     launch_date: Mapped[date | None] = mapped_column(Date)
+    decay_date: Mapped[date | None] = mapped_column(Date)
+    international_designator: Mapped[str | None] = mapped_column(Text)
+    object_type: Mapped[ObjectType | None] = mapped_column(
+        Enum(ObjectType, name="object_type")
+    )
+    rcs_size: Mapped[RcsSize | None] = mapped_column(Enum(RcsSize, name="rcs_size"))
     category: Mapped[SatelliteCategory | None] = mapped_column(
         Enum(SatelliteCategory, name="satellite_category"), nullable=True
     )

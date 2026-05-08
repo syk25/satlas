@@ -25,9 +25,10 @@ async def refresh_tle_job() -> None:
             return
 
     if count > 0:
+        # Glob clears all derived position caches (`:full`, future variants)
+        # AND the master `:all` cache; warm_positions_cache rebuilds master.
         await cache_clear_pattern("satlas:overhead:*")
-        await cache_clear_pattern("satlas:positions")
-        await cache_clear_pattern("satlas:positions:all")
+        await cache_clear_pattern("satlas:positions*")
         async with AsyncSessionLocal() as warm_db:
             await warm_positions_cache(warm_db)
 

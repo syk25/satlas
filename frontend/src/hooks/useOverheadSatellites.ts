@@ -9,7 +9,10 @@ interface State {
   error: boolean
 }
 
-export function useOverheadSatellites(countryCode: string | null): State {
+export function useOverheadSatellites(
+  countryCode: string | null,
+  includeInactive: boolean = false
+): State {
   const [state, setState] = useState<State>({
     data: null,
     loading: false,
@@ -25,7 +28,11 @@ export function useOverheadSatellites(countryCode: string | null): State {
     let cancelled = false
     setState({ data: null, loading: true, error: false })
 
-    fetch(`${API_BASE}/satellites/overhead/${countryCode}`)
+    const url = `${API_BASE}/satellites/overhead/${countryCode}${
+      includeInactive ? '?include_inactive=true' : ''
+    }`
+
+    fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json() as Promise<SatelliteOverhead[]>
@@ -40,7 +47,7 @@ export function useOverheadSatellites(countryCode: string | null): State {
     return () => {
       cancelled = true
     }
-  }, [countryCode])
+  }, [countryCode, includeInactive])
 
   return state
 }

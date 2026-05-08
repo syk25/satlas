@@ -11,7 +11,8 @@
     "all": "All",
     "count_one": "{{count}} satellite overhead",
     "count_other": "{{count}} satellites overhead",
-    "updatedAt": "As of {{time}} UTC"
+    "updatedAt": "As of {{time}} UTC",
+    "includeInactive": "Show rocket bodies & debris"
   },
   "satellite": {
     "norad": "NORAD {{id}}",
@@ -21,6 +22,22 @@
     "operator": "Operator",
     "country": "Country",
     "launchDate": "Launch date",
+    "decayDate": "Decay date",
+    "designator": "Intl. designator",
+    "objectType": "Type",
+    "rcsSize": "Size",
+    "objectTypes": {
+      "PAYLOAD": "Payload",
+      "ROCKET_BODY": "Rocket body",
+      "DEBRIS": "Debris",
+      "UNKNOWN": "Unknown"
+    },
+    "rcsSizes": {
+      "LARGE": "Large",
+      "MEDIUM": "Medium",
+      "SMALL": "Small",
+      "UNKNOWN": "Unknown"
+    },
     "track": "Track satellite",
     "tracking": "TRACKING",
     "trackingHint": "Showing footprint and 95-min ground track.",

@@ -37,6 +37,10 @@ export interface SatelliteOverhead {
   operator_type: string | null
   orbit_class: string | null
   launch_date: string | null
+  decay_date: string | null
+  international_designator: string | null
+  object_type: string | null
+  rcs_size: string | null
   line1: string
   line2: string
   entry_time: string

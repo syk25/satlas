@@ -59,10 +59,12 @@ interface Props {
   selectedSat: SatelliteOverhead | null
   activeCategory: SatelliteCategory | null
   satOffMapDir: 'north' | 'south' | null
+  includeInactive: boolean
   onTrack: (sat: SatelliteOverhead) => void
   onStopTracking: () => void
   onSelectSat: (sat: SatelliteOverhead | null) => void
   onCategoryChange: (cat: SatelliteCategory | null) => void
+  onIncludeInactiveChange: (next: boolean) => void
 }
 
 function CategoryBadge({ category }: { category: SatelliteCategory | null }) {
@@ -134,6 +136,34 @@ function SatelliteDetail({
           <div className="sat-detail-row">
             <span className="sat-detail-label">{t('satellite.launchDate')}</span>
             <span className="sat-detail-value">{sat.launch_date}</span>
+          </div>
+        )}
+        {sat.decay_date && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.decayDate')}</span>
+            <span className="sat-detail-value">{sat.decay_date}</span>
+          </div>
+        )}
+        {sat.international_designator && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.designator')}</span>
+            <span className="sat-detail-value">{sat.international_designator}</span>
+          </div>
+        )}
+        {sat.object_type && sat.object_type !== 'PAYLOAD' && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.objectType')}</span>
+            <span className="sat-detail-value">
+              {t(`satellite.objectTypes.${sat.object_type}`)}
+            </span>
+          </div>
+        )}
+        {sat.rcs_size && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.rcsSize')}</span>
+            <span className="sat-detail-value">
+              {t(`satellite.rcsSizes.${sat.rcs_size}`)}
+            </span>
           </div>
         )}
       </div>
@@ -298,10 +328,12 @@ export function SatellitePanel({
   selectedSat,
   activeCategory,
   satOffMapDir,
+  includeInactive,
   onTrack,
   onStopTracking,
   onSelectSat,
   onCategoryChange,
+  onIncludeInactiveChange,
 }: Props) {
   const { t } = useTranslation()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -371,11 +403,29 @@ export function SatellitePanel({
     }
     if (loading) return <p className="panel-status">{t('panel.loading')}</p>
     if (error) return <p className="panel-status panel-error">{t('panel.error')}</p>
+
+    const includeToggle = (
+      <label className="include-inactive-toggle">
+        <input
+          type="checkbox"
+          checked={includeInactive}
+          onChange={(e) => onIncludeInactiveChange(e.target.checked)}
+        />
+        <span>{t('panel.includeInactive')}</span>
+      </label>
+    )
+
     if (!data || data.length === 0)
-      return <p className="panel-status">{t('panel.noSatellites')}</p>
+      return (
+        <>
+          {includeToggle}
+          <p className="panel-status">{t('panel.noSatellites')}</p>
+        </>
+      )
 
     return (
       <>
+        {includeToggle}
         {presentCategories.length > 1 && (
           <div className="category-tabs">
             <button

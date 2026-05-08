@@ -17,8 +17,12 @@ export default function App() {
   const [selectedSat, setSelectedSat] = useState<SatelliteOverhead | null>(null)
   const [activeCategory, setActiveCategory] = useState<SatelliteCategory | null>(null)
   const [satOffMapDir, setSatOffMapDir] = useState<'north' | 'south' | null>(null)
+  const [includeInactive, setIncludeInactive] = useState(false)
 
-  const { data, loading, error } = useOverheadSatellites(selected?.code ?? null)
+  const { data, loading, error } = useOverheadSatellites(
+    selected?.code ?? null,
+    includeInactive
+  )
 
   const handleCountrySelect = useCallback((code: string, name: string) => {
     setSelected((prev) => {
@@ -75,10 +79,12 @@ export default function App() {
           selectedSat={selectedSat}
           activeCategory={activeCategory}
           satOffMapDir={satOffMapDir}
+          includeInactive={includeInactive}
           onTrack={handleTrack}
           onStopTracking={handleStopTracking}
           onSelectSat={handleSelectSat}
           onCategoryChange={setActiveCategory}
+          onIncludeInactiveChange={setIncludeInactive}
         />
       </div>
     </div>

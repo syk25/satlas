@@ -11,7 +11,8 @@
     "all": "전체",
     "count_one": "위성 {{count}}개 통과 중",
     "count_other": "위성 {{count}}개 통과 중",
-    "updatedAt": "{{time}} UTC 기준"
+    "updatedAt": "{{time}} UTC 기준",
+    "includeInactive": "로켓 잔해·디브리 포함"
   },
   "satellite": {
     "norad": "NORAD {{id}}",
@@ -21,6 +22,22 @@
     "operator": "운영자",
     "country": "국가",
     "launchDate": "발사일",
+    "decayDate": "소멸일",
+    "designator": "국제 식별자",
+    "objectType": "유형",
+    "rcsSize": "크기",
+    "objectTypes": {
+      "PAYLOAD": "페이로드",
+      "ROCKET_BODY": "로켓 잔해",
+      "DEBRIS": "잔해",
+      "UNKNOWN": "미상"
+    },
+    "rcsSizes": {
+      "LARGE": "대형",
+      "MEDIUM": "중형",
+      "SMALL": "소형",
+      "UNKNOWN": "미상"
+    },
     "track": "위성 추적",
     "tracking": "추적 중",
     "trackingHint": "풋프린트와 95분 예측 궤도를 표시합니다.",

@@ -245,6 +245,26 @@ html, body, #root {
   border-bottom: 1px solid var(--border);
 }
 
+.include-inactive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.include-inactive-toggle input {
+  cursor: pointer;
+  accent-color: var(--text-primary);
+}
+
+.include-inactive-toggle:hover span {
+  color: var(--text-primary);
+}
+
 .category-tab {
   padding: 3px 8px;
   font-size: 10px;
