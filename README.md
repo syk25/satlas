@@ -46,7 +46,7 @@ Previously, answering this question required checking each satellite's orbit ind
 
 | Source | Purpose | License |
 |---|---|---|
-| [CelesTrak](https://celestrak.org) | TLE orbital elements for active satellites (fetched twice daily) | Free public service, no API key required |
+| [CelesTrak](https://celestrak.org) | TLE orbital elements + object metadata (operator country, launch date) for active satellites; fetched twice daily as GP JSON | Free public service, no API key required |
 | [Natural Earth](https://www.naturalearthdata.com) | Country boundary polygons for satellite-over-territory intersection | Public Domain |
 
 Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE source and may be integrated in a future phase. Registration is free but required.

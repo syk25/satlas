@@ -31,6 +31,7 @@ class SatelliteOverhead(BaseModel):
     operator_name: str | None
     operator_type: str | None
     orbit_class: str | None
+    launch_date: str | None
     line1: str
     line2: str
     entry_time: datetime
@@ -84,10 +85,11 @@ async def get_overhead(
                         norad_id=p["norad_id"],
                         name=p["name"],
                         category=p["category"],
-                        operator_country=None,
+                        operator_country=p.get("operator_country"),
                         operator_name=None,
                         operator_type=None,
                         orbit_class=p["orbit_class"],
+                        launch_date=p.get("launch_date"),
                         line1=p["line1"],
                         line2=p["line2"],
                         entry_time=now,

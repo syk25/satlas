@@ -36,6 +36,7 @@ export interface SatelliteOverhead {
   operator_name: string | null
   operator_type: string | null
   orbit_class: string | null
+  launch_date: string | null
   line1: string
   line2: string
   entry_time: string

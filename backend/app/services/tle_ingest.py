@@ -2,7 +2,8 @@ import asyncio
 import json
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from typing import NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -11,7 +12,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.satellite import OrbitClass, Satellite, SatelliteCategory, TleSnapshot
 from app.services.position import get_position
 
-BASE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle"
+BASE_URL = "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=json"
+
+
+class TleEntry(NamedTuple):
+    """One satellite parsed from a CelesTrak JSON feed."""
+
+    name: str
+    line1: str
+    line2: str
+    country_code: str | None
+    launch_date: date | None
+
 
 POSITIONS_ALL_CACHE_KEY = "satlas:positions:all"
 POSITIONS_ALL_CACHE_TTL = 120  # 60s interval job → always fresh before expiry
@@ -42,16 +54,46 @@ CATEGORY_FEEDS: list[tuple[str, SatelliteCategory]] = [
 _HEADERS = {"User-Agent": "satlas/0.1 (https://github.com/syk25/satlas)"}
 
 
-def _parse_tle_blocks(raw: str) -> list[tuple[str, str, str]]:
-    lines = [ln.rstrip() for ln in raw.splitlines() if ln.strip()]
-    blocks = []
-    for i in range(0, len(lines) - 2, 3):
-        name = lines[i].strip()
-        line1 = lines[i + 1]
-        line2 = lines[i + 2]
-        if line1.startswith("1 ") and line2.startswith("2 "):
-            blocks.append((name, line1, line2))
-    return blocks
+def _parse_launch_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value[:10])
+    except ValueError:
+        return None
+
+
+def _parse_json_entries(raw: str) -> list[TleEntry]:
+    """Parse CelesTrak GP JSON payload into TleEntry tuples.
+
+    Skips entries without complete TLE lines so downstream SGP4 calls don't fail.
+    """
+    try:
+        items = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(items, list):
+        return []
+
+    entries: list[TleEntry] = []
+    for item in items:
+        line1 = item.get("TLE_LINE1")
+        line2 = item.get("TLE_LINE2")
+        name = item.get("OBJECT_NAME")
+        if not (line1 and line2 and name):
+            continue
+        if not (line1.startswith("1 ") and line2.startswith("2 ")):
+            continue
+        entries.append(
+            TleEntry(
+                name=name.strip(),
+                line1=line1,
+                line2=line2,
+                country_code=(item.get("COUNTRY_CODE") or None),
+                launch_date=_parse_launch_date(item.get("LAUNCH_DATE")),
+            )
+        )
+    return entries
 
 
 def _parse_epoch(line1: str) -> datetime:
@@ -106,7 +148,7 @@ def _fetch_raw_sync(url: str) -> tuple[int, str]:
         return resp.status, resp.read().decode("utf-8", errors="replace")
 
 
-async def _fetch_raw(group: str) -> list[tuple[str, str, str]]:
+async def _fetch_raw(group: str) -> list[TleEntry]:
     url = BASE_URL.format(group=group)
     for attempt in range(3):
         try:
@@ -116,15 +158,15 @@ async def _fetch_raw(group: str) -> list[tuple[str, str, str]]:
             if status not in (200, 403):
                 logger.warning("%s: unexpected status %d", group, status)
                 return []
-            blocks = _parse_tle_blocks(body)
-            if not blocks:
+            entries = _parse_json_entries(body)
+            if not entries:
                 logger.warning(
-                    "%s: status=%d but no TLE parsed. body[:200]=%r",
+                    "%s: status=%d but no entries parsed. body[:200]=%r",
                     group,
                     status,
                     body[:200],
                 )
-            return blocks
+            return entries
         except OSError as exc:
             logger.warning(
                 "%s: request error (attempt %d): %s: %s",
@@ -138,49 +180,49 @@ async def _fetch_raw(group: str) -> list[tuple[str, str, str]]:
     return []
 
 
-async def _upsert_blocks(
+async def _upsert_entries(
     db: AsyncSession,
-    blocks: list[tuple[str, str, str]],
+    entries: list[TleEntry],
     category: SatelliteCategory,
     now: datetime,
 ) -> int:
-    """Bulk-upsert one feed's TLE blocks into the DB. Returns satellite count."""
+    """Bulk-upsert one feed's entries into the DB. Returns satellite count."""
     sat_rows = []
     tle_meta: list[tuple[int, str, str, datetime]] = []
-    for name, line1, line2 in blocks:
-        norad_id = int(line2[2:7])
+    for entry in entries:
+        norad_id = int(entry.line2[2:7])
         sat_rows.append(
             {
                 "norad_id": norad_id,
-                "name": name,
+                "name": entry.name,
                 "is_active": True,
                 "category": category,
-                "orbit_class": orbit_class_from_tle(line2),
+                "orbit_class": orbit_class_from_tle(entry.line2),
+                "operator_country": entry.country_code,
+                "launch_date": entry.launch_date,
             }
         )
-        tle_meta.append((norad_id, line1, line2, _parse_epoch(line1)))
+        tle_meta.append((norad_id, entry.line1, entry.line2, _parse_epoch(entry.line1)))
 
     norad_to_id: dict[int, int] = {}
     for i in range(0, len(sat_rows), _BATCH):
         chunk = sat_rows[i : i + _BATCH]
         ins = pg_insert(Satellite).values(chunk)
-        if category == SatelliteCategory.OTHER:
-            stmt = ins.on_conflict_do_update(
-                index_elements=["norad_id"],
-                set_={
-                    "name": ins.excluded.name,
-                    "orbit_class": ins.excluded.orbit_class,
-                },
-            )
-        else:
-            stmt = ins.on_conflict_do_update(
-                index_elements=["norad_id"],
-                set_={
-                    "name": ins.excluded.name,
-                    "category": ins.excluded.category,
-                    "orbit_class": ins.excluded.orbit_class,
-                },
-            )
+        # Always overwrite operator_country / launch_date — CelesTrak is canonical.
+        # Category is held back on the OTHER (catch-all) feed so a more specific
+        # earlier feed doesn't lose its label.
+        update_set = {
+            "name": ins.excluded.name,
+            "orbit_class": ins.excluded.orbit_class,
+            "operator_country": ins.excluded.operator_country,
+            "launch_date": ins.excluded.launch_date,
+        }
+        if category != SatelliteCategory.OTHER:
+            update_set["category"] = ins.excluded.category
+        stmt = ins.on_conflict_do_update(
+            index_elements=["norad_id"],
+            set_=update_set,
+        )
         result = await db.execute(stmt.returning(Satellite.norad_id, Satellite.id))
         for row in result:
             norad_to_id[row.norad_id] = row.id
@@ -206,8 +248,8 @@ async def _upsert_blocks(
 _GROUP_TO_CATEGORY: dict[str, SatelliteCategory] = dict(CATEGORY_FEEDS)
 
 
-async def ingest_feed(db: AsyncSession, group: str, raw_tle: str) -> int:
-    """Parse raw TLE text pushed from GitHub Actions and upsert to DB.
+async def ingest_feed(db: AsyncSession, group: str, raw_json: str) -> int:
+    """Parse CelesTrak GP JSON pushed from GitHub Actions and upsert to DB.
 
     Called by the admin endpoint; decouples CelesTrak fetching from the server
     so GitHub Actions runners (non-datacenter IPs) can pull the data instead.
@@ -216,13 +258,13 @@ async def ingest_feed(db: AsyncSession, group: str, raw_tle: str) -> int:
     category = _GROUP_TO_CATEGORY.get(group)
     if category is None:
         raise ValueError(f"Unknown TLE group: {group!r}")
-    blocks = _parse_tle_blocks(raw_tle)
-    if not blocks:
-        logger.warning("ingest_feed: no TLE blocks in payload for group=%s", group)
+    entries = _parse_json_entries(raw_json)
+    if not entries:
+        logger.warning("ingest_feed: no entries in payload for group=%s", group)
         return 0
-    logger.info("ingest_feed: %s: %d blocks received", group, len(blocks))
+    logger.info("ingest_feed: %s: %d entries received", group, len(entries))
     now = datetime.now(timezone.utc)
-    count = await _upsert_blocks(db, blocks, category, now)
+    count = await _upsert_entries(db, entries, category, now)
     logger.info("ingest_feed: %s: committed %d satellites", group, count)
     return count
 
@@ -240,15 +282,15 @@ async def refresh_tle(db: AsyncSession) -> int:
 
     for idx, (group, category) in enumerate(CATEGORY_FEEDS, 1):
         logger.info("[%d/%d] fetching feed: %s", idx, feed_count, group)
-        blocks = await _fetch_raw(group)
-        if not blocks:
+        entries = await _fetch_raw(group)
+        if not entries:
             logger.warning("[%d/%d] feed empty or failed: %s", idx, feed_count, group)
             continue
         logger.info(
-            "[%d/%d] %s: %d TLE blocks received", idx, feed_count, group, len(blocks)
+            "[%d/%d] %s: %d entries received", idx, feed_count, group, len(entries)
         )
 
-        count = await _upsert_blocks(db, blocks, category, now)
+        count = await _upsert_entries(db, entries, category, now)
         total += count
         logger.info(
             "[%d/%d] %s: committed %d satellites, running total=%d",
@@ -329,6 +371,8 @@ async def _fetch_position_rows(db: AsyncSession) -> list[tuple]:
             Satellite.name,
             Satellite.category,
             Satellite.orbit_class,
+            Satellite.operator_country,
+            Satellite.launch_date,
             TleSnapshot.line1,
             TleSnapshot.line2,
         )
@@ -362,7 +406,16 @@ async def warm_positions_cache(db: AsyncSession) -> int:
 
     def _compute() -> list[dict]:
         result = []
-        for norad_id, name, category, orbit_class, line1, line2 in rows:
+        for (
+            norad_id,
+            name,
+            category,
+            orbit_class,
+            operator_country,
+            launch_date,
+            line1,
+            line2,
+        ) in rows:
             pos = get_position(line1.strip(), line2.strip(), at=now)
             if pos is None:
                 continue
@@ -375,6 +428,8 @@ async def warm_positions_cache(db: AsyncSession) -> int:
                     "lon": lon,
                     "category": category.value if category else None,
                     "orbit_class": orbit_class.value if orbit_class else None,
+                    "operator_country": operator_country,
+                    "launch_date": launch_date.isoformat() if launch_date else None,
                     "line1": line1.strip(),
                     "line2": line2.strip(),
                 }

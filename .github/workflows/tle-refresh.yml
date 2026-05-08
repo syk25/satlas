@@ -33,40 +33,42 @@ jobs:
           for group in GROUPS:
               print(f"── {group}")
 
-              # 1. Fetch from CelesTrak (GHA runner IPs are not blocked)
+              # 1. Fetch from CelesTrak (GHA runner IPs are not blocked).
+              # JSON format includes COUNTRY_CODE / LAUNCH_DATE alongside TLE lines.
               try:
                   req = urllib.request.Request(
-                      f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle",
+                      f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=json",
                       headers={"User-Agent": "satlas/0.1 (https://github.com/syk25/satlas)"},
                   )
                   with urllib.request.urlopen(req, timeout=120) as r:
-                      tle_bytes = r.read()
+                      payload = r.read()
               except Exception as exc:
                   print(f"   skip: fetch error — {exc}")
                   failed.append(group)
                   continue
 
-              if not tle_bytes.strip() or b"not found" in tle_bytes.lower():
+              stripped = payload.strip()
+              if not stripped or stripped == b"[]" or b"not found" in stripped.lower():
                   print(f"   skip: empty or invalid response")
                   failed.append(group)
                   continue
 
-              print(f"   fetched {len(tle_bytes):,} bytes")
+              print(f"   fetched {len(payload):,} bytes")
 
               # 2. Push to Satlas API
               try:
                   req2 = urllib.request.Request(
                       f"{API_URL}/admin/tle/ingest/{group}",
-                      data=tle_bytes,
+                      data=payload,
                       method="POST",
                       headers={
                           "Authorization": f"Bearer {ADMIN_TOKEN}",
-                          "Content-Type": "text/plain; charset=utf-8",
+                          "Content-Type": "application/json; charset=utf-8",
                       },
                   )
                   with urllib.request.urlopen(req2, timeout=60) as r:
-                      body = json.loads(r.read())
-                  count = body["satellites"]
+                      resp = json.loads(r.read())
+                  count = resp["satellites"]
                   print(f"   committed {count:,} satellites")
                   total += count
               except Exception as exc:

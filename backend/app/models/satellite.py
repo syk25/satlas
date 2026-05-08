@@ -52,7 +52,7 @@ class Satellite(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     norad_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    operator_country: Mapped[str | None] = mapped_column(CHAR(2))
+    operator_country: Mapped[str | None] = mapped_column(Text)
     operator_name: Mapped[str | None] = mapped_column(Text)
     operator_type: Mapped[OperatorType | None] = mapped_column(
         Enum(OperatorType, name="operator_type")

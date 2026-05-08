@@ -130,6 +130,12 @@ function SatelliteDetail({
             <span className="sat-detail-value">{sat.operator_country}</span>
           </div>
         )}
+        {sat.launch_date && (
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.launchDate')}</span>
+            <span className="sat-detail-value">{sat.launch_date}</span>
+          </div>
+        )}
       </div>
       {pos && (
         <div className="sat-detail-body">

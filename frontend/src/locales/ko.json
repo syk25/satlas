@@ -20,6 +20,7 @@
     "category": "분류",
     "operator": "운영자",
     "country": "국가",
+    "launchDate": "발사일",
     "track": "위성 추적",
     "tracking": "추적 중",
     "trackingHint": "풋프린트와 95분 예측 궤도를 표시합니다.",

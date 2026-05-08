@@ -30,10 +30,11 @@ async def push_tle_feed(
     request: Request,
     db: AsyncSession = Depends(get_db),  # noqa: B008
 ) -> dict:
-    """Receive raw TLE text from GitHub Actions and upsert to DB.
+    """Receive CelesTrak GP JSON from GitHub Actions and upsert to DB.
 
     GitHub Actions runners use non-datacenter IPs not blocked by CelesTrak,
     so they fetch the data and push it here instead of the server pulling it.
+    The JSON format includes COUNTRY_CODE and LAUNCH_DATE alongside TLE lines.
     """
     _verify_token(request)
     raw = (await request.body()).decode("utf-8", errors="replace")
