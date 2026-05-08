@@ -1,9 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navbar } from './components/Navbar'
 import { SatellitePanel } from './components/SatellitePanel'
 import { WorldMap } from './components/WorldMap'
 import { useOverheadSatellites } from './hooks/useOverheadSatellites'
 import type { SatelliteCategory, SatelliteOverhead } from './types'
+
+const GATING_TICK_MS = 1000
 
 export default function App() {
   const [selected, setSelected] = useState<{ code: string; name: string } | null>(null)
@@ -23,6 +25,40 @@ export default function App() {
     selected?.code ?? null,
     includeInactive
   )
+
+  // ADR-018 client-side gating: from the 30-min server window, show only
+  // satellites whose [entry_time, exit_time] currently contains `now`.
+  // Re-evaluate every second; only call setState when membership changes
+  // to avoid redundant re-renders of the map.
+  const [visibleSatellites, setVisibleSatellites] = useState<SatelliteOverhead[]>([])
+  const visibleRef = useRef<SatelliteOverhead[]>([])
+
+  useEffect(() => {
+    if (!data) {
+      visibleRef.current = []
+      setVisibleSatellites([])
+      return
+    }
+    const evaluate = () => {
+      const now = Date.now()
+      const next = data.filter((s) => {
+        const entry = Date.parse(s.entry_time)
+        const exit = Date.parse(s.exit_time)
+        return entry <= now && now <= exit
+      })
+      const prev = visibleRef.current
+      const changed =
+        prev.length !== next.length ||
+        next.some((s, i) => s.norad_id !== prev[i]?.norad_id)
+      if (changed) {
+        visibleRef.current = next
+        setVisibleSatellites(next)
+      }
+    }
+    evaluate()
+    const tick = window.setInterval(evaluate, GATING_TICK_MS)
+    return () => window.clearInterval(tick)
+  }, [data])
 
   const handleCountrySelect = useCallback((code: string, name: string) => {
     setSelected((prev) => {
@@ -65,14 +101,14 @@ export default function App() {
             onSatelliteOffMap={setSatOffMapDir}
             selectedSat={selectedSat}
             selectedCode={selected?.code ?? null}
-            satellites={data ?? []}
+            satellites={visibleSatellites}
             trackedSatellite={trackedSatellite}
             activeCategory={activeCategory}
           />
         </div>
         <SatellitePanel
           countryName={selected?.name ?? null}
-          data={data}
+          data={data === null ? null : visibleSatellites}
           loading={loading}
           error={error}
           trackedSatellite={trackedSatellite}

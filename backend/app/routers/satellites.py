@@ -7,12 +7,16 @@ from pydantic import BaseModel
 
 from app.models.satellite import SatelliteCategory
 from app.services import boundaries, cache
+from app.services.overhead_simulation import simulate_overhead_window
 from app.services.tle_ingest import POSITIONS_ALL_CACHE_KEY
 
 router = APIRouter(prefix="/satellites", tags=["satellites"])
 
-OVERHEAD_CACHE_TTL = 60  # seconds
-POSITIONS_CACHE_TTL = 60  # seconds
+# 5-min server-side cache per (country, category, include_inactive) — see ADR-018.
+# Window is 30min, refresh cadence on the client is 15min, so 5min server TTL
+# bounds first-request cost without letting TLE drift become visible.
+OVERHEAD_CACHE_TTL = 300
+POSITIONS_CACHE_TTL = 60
 POSITIONS_CACHE_KEY = "satlas:positions"
 
 
@@ -39,6 +43,7 @@ class SatelliteOverhead(BaseModel):
     line1: str
     line2: str
     entry_time: datetime
+    exit_time: datetime
 
 
 @router.get("/overhead/{country_code}", response_model=list[SatelliteOverhead])
@@ -98,32 +103,29 @@ async def get_overhead(
 
     now = datetime.now(timezone.utc)
 
-    def _filter() -> list[SatelliteOverhead]:
-        result = []
-        for p in all_positions:
-            if boundaries.is_over_country(p["lat"], p["lon"], cc):
-                result.append(
-                    SatelliteOverhead(
-                        norad_id=p["norad_id"],
-                        name=p["name"],
-                        category=p["category"],
-                        operator=p.get("operator"),
-                        operator_name=None,
-                        operator_type=None,
-                        orbit_class=p["orbit_class"],
-                        launch_date=p.get("launch_date"),
-                        decay_date=p.get("decay_date"),
-                        international_designator=p.get("international_designator"),
-                        object_type=p.get("object_type"),
-                        rcs_size=p.get("rcs_size"),
-                        line1=p["line1"],
-                        line2=p["line2"],
-                        entry_time=now,
-                    )
-                )
-        return result
+    windowed = await asyncio.to_thread(simulate_overhead_window, cc, all_positions, now)
 
-    result = await asyncio.to_thread(_filter)
+    result = [
+        SatelliteOverhead(
+            norad_id=p["norad_id"],
+            name=p["name"],
+            category=p["category"],
+            operator=p.get("operator"),
+            operator_name=None,
+            operator_type=None,
+            orbit_class=p["orbit_class"],
+            launch_date=p.get("launch_date"),
+            decay_date=p.get("decay_date"),
+            international_designator=p.get("international_designator"),
+            object_type=p.get("object_type"),
+            rcs_size=p.get("rcs_size"),
+            line1=p["line1"],
+            line2=p["line2"],
+            entry_time=p["entry_time"],
+            exit_time=p["exit_time"],
+        )
+        for p in windowed
+    ]
 
     await cache.cache_set(
         cache_key,

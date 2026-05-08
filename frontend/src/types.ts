@@ -44,4 +44,5 @@ export interface SatelliteOverhead {
   line1: string
   line2: string
   entry_time: string
+  exit_time: string
 }

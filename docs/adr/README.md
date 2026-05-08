@@ -21,6 +21,10 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-009](ADR-009-orm-strategy.md) | Database Access Strategy — SQLAlchemy ORM + Alembic | Accepted |
 | [ADR-010](ADR-010-testing-strategy.md) | Testing Strategy — Real Database, No Mocks | Accepted |
 | [ADR-011](ADR-011-logging-strategy.md) | Logging Strategy — structlog, JSON in Production | Accepted |
+| [ADR-012](ADR-012-frontend-map-library.md) | Frontend Map Library | Accepted |
+| [ADR-013](ADR-013-satellite-categorization.md) | Satellite Categorization | Accepted |
+| [ADR-017](ADR-017-satellite-metadata-pipeline.md) | Satellite Metadata Pipeline — CelesTrak GP JSON + SATCAT | Accepted |
+| [ADR-018](ADR-018-overhead-membership-refresh.md) | Overhead Membership Refresh — Server-Window Prediction + Client-Side Gating | Accepted |
 
 ---
 
