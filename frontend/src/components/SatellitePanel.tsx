@@ -8,6 +8,7 @@ import {
   propagate,
   twoline2satrec,
 } from 'satellite.js'
+import { useCountryAt } from '../hooks/useCountryAt'
 import { CATEGORY_COLOR } from '../types'
 import type { SatelliteCategory, SatelliteOverhead } from '../types'
 
@@ -86,6 +87,7 @@ function SatelliteDetail({
   const { t } = useTranslation()
   const color = sat.category ? CATEGORY_COLOR[sat.category] : '#facc15'
   const pos = useSatPosition(sat)
+  const countryAt = useCountryAt(pos?.lat ?? null, pos?.lon ?? null)
 
   return (
     <div className="sat-detail">
@@ -132,6 +134,12 @@ function SatelliteDetail({
       {pos && (
         <div className="sat-detail-body">
           <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.territory')}</span>
+            <span className="sat-detail-value">
+              {countryAt ? countryAt.name : t('satellite.openSea')}
+            </span>
+          </div>
+          <div className="sat-detail-row">
             <span className="sat-detail-label">{t('satellite.latitude')}</span>
             <span className="sat-detail-value">{pos.lat.toFixed(2)}°</span>
           </div>
@@ -172,6 +180,7 @@ function TrackingView({
   const { t } = useTranslation()
   const color = sat.category ? CATEGORY_COLOR[sat.category] : '#facc15'
   const pos = useSatPosition(sat)
+  const countryAt = useCountryAt(pos?.lat ?? null, pos?.lon ?? null)
 
   return (
     <div className="sat-detail">
@@ -208,6 +217,12 @@ function TrackingView({
       </div>
       {pos && (
         <div className="sat-detail-body">
+          <div className="sat-detail-row">
+            <span className="sat-detail-label">{t('satellite.territory')}</span>
+            <span className="sat-detail-value">
+              {countryAt ? countryAt.name : t('satellite.openSea')}
+            </span>
+          </div>
           <div className="sat-detail-row">
             <span className="sat-detail-label">{t('satellite.latitude')}</span>
             <span className="sat-detail-value">{pos.lat.toFixed(2)}°</span>

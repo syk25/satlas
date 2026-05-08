@@ -29,6 +29,8 @@
     "longitude": "Longitude",
     "altitude": "Altitude",
     "speed": "Speed",
+    "territory": "Territory",
+    "openSea": "International waters",
     "offMap": {
       "north": "Satellite is over the North Pole — beyond the map's display range (>85°N).",
       "south": "Satellite is over the South Pole — beyond the map's display range (>85°S)."
