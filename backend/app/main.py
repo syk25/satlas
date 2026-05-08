@@ -26,9 +26,9 @@ if settings.sentry_dsn:
         environment=settings.environment,
         send_default_pii=False,
     )
-    _startup_log.info("Sentry initialized (environment=%s)", settings.environment)
+    print("[sentry] initialized, environment =", settings.environment, flush=True)
 else:
-    _startup_log.warning("SENTRY_DSN not configured — Sentry disabled")
+    print("[sentry] SENTRY_DSN not set — disabled", flush=True)
 
 
 @asynccontextmanager
