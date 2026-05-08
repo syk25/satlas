@@ -26,4 +26,4 @@ primary_region = "sjc"  # San Jose — CelesTrak blocks NRT IPs for large feeds 
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "256mb"
+  memory = "512mb"
