@@ -108,6 +108,31 @@ jobs:
           print(f"\n{'═' * 40}")
           print(f"Total satellites committed: {total:,}")
 
+          # ── 24h visit-frequency precompute (ADR-019) ──
+          # Triggered after all feeds so the sweep uses the freshest catalog.
+          # Runs ~5 minutes; the API endpoint blocks until the in-thread sweep
+          # completes, then writes per-country hashes to Redis.
+          print("── visits/recompute")
+          try:
+              req3 = urllib.request.Request(
+                  f"{API_URL}/admin/visits/recompute",
+                  data=b"",
+                  method="POST",
+                  headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
+              )
+              with urllib.request.urlopen(req3, timeout=900) as r:
+                  resp = json.loads(r.read())
+              print(
+                  f"   {resp['satellites']:,} sats, "
+                  f"{resp['countries']} countries, "
+                  f"{resp['pairs']:,} pairs, "
+                  f"{resp['elapsed_seconds']}s"
+              )
+          except Exception as exc:
+              print(f"   ERROR recomputing visits — {exc}")
+              # Non-fatal: TLE ingest already succeeded; visits can be retried
+              # next cycle. Frontend gracefully handles missing pass counts.
+
           if failed:
               print(f"Failed feeds: {', '.join(failed)}")
               sys.exit(1)

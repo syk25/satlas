@@ -12,7 +12,12 @@
     "count_one": "위성 {{count}}개 통과 중",
     "count_other": "위성 {{count}}개 통과 중",
     "updatedAt": "{{time}} UTC 기준",
-    "includeInactive": "로켓 잔해·디브리 포함"
+    "includeInactive": "로켓 잔해·디브리 포함",
+    "sortLabel": "정렬",
+    "sortEntry": "진입 시각",
+    "sortFrequency": "방문 빈도",
+    "passes24h_one": "24시간 내 {{count}}회 통과",
+    "passes24h_other": "24시간 내 {{count}}회 통과"
   },
   "satellite": {
     "norad": "NORAD {{id}}",

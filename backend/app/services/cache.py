@@ -50,3 +50,33 @@ async def cache_clear_pattern(pattern: str) -> None:
             await _redis.delete(*keys)
     except RedisError:
         logger.warning("Redis cache_clear_pattern failed", extra={"pattern": pattern})
+
+
+async def cache_hash_set(key: str, mapping: dict[str, str], ttl: int) -> None:
+    """Replace a hash wholesale and apply a TTL.
+
+    Used for per-country visit-count tables (ADR-019). Pipeline ensures the
+    delete + hset + expire happen atomically so readers never see a partial
+    rebuild.
+    """
+    if _redis is None or not mapping:
+        return
+    try:
+        async with _redis.pipeline(transaction=True) as pipe:
+            pipe.delete(key)
+            pipe.hset(key, mapping=mapping)
+            pipe.expire(key, ttl)
+            await pipe.execute()
+    except RedisError:
+        logger.warning("Redis cache_hash_set failed", extra={"key": key})
+
+
+async def cache_hash_mget(key: str, fields: list[str]) -> list[str | None]:
+    """Fetch multiple hash fields in one round-trip. Missing fields → None."""
+    if _redis is None or not fields:
+        return [None] * len(fields)
+    try:
+        return await _redis.hmget(key, fields)
+    except RedisError:
+        logger.warning("Redis cache_hash_mget failed", extra={"key": key})
+        return [None] * len(fields)

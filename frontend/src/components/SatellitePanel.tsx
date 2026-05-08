@@ -10,7 +10,7 @@ import {
 } from 'satellite.js'
 import { useCountryAt } from '../hooks/useCountryAt'
 import { CATEGORY_COLOR } from '../types'
-import type { SatelliteCategory, SatelliteOverhead } from '../types'
+import type { OverheadSort, SatelliteCategory, SatelliteOverhead } from '../types'
 
 interface SatPosition {
   lat: number
@@ -345,6 +345,11 @@ function SatelliteItem({
         <span>{t('satellite.norad', { id: sat.norad_id })}</span>
         {sat.orbit_class && <span className="sat-orbit-inline">{sat.orbit_class}</span>}
         {sat.operator && <span className="sat-country">{sat.operator}</span>}
+        {sat.passes_24h != null && (
+          <span className="sat-passes-inline">
+            {t('panel.passes24h', { count: sat.passes_24h })}
+          </span>
+        )}
       </div>
       <CategoryBadge category={sat.category} />
     </button>
@@ -381,7 +386,12 @@ export function SatellitePanel({
 }: Props) {
   const { t } = useTranslation()
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [sortMode, setSortMode] = useState<OverheadSort>('entry')
   const dragStartY = useRef(0)
+
+  // Frequency sort is only useful when the precompute has produced numbers;
+  // disable the toggle while every row reports null.
+  const frequencyAvailable = (data ?? []).some((s) => s.passes_24h != null)
 
   // Auto-expand when content becomes available
   useEffect(() => {
@@ -399,8 +409,6 @@ export function SatellitePanel({
     else if (dy < -40) setSheetOpen(false)
   }
 
-  const categoryOrder = Object.fromEntries(ALL_CATEGORIES.map((c, i) => [c, i]))
-
   const filtered = (
     activeCategory
       ? (data ?? []).filter((s) => s.category === activeCategory)
@@ -408,9 +416,18 @@ export function SatellitePanel({
   )
     .slice()
     .sort((a, b) => {
-      const catA = a.category ? (categoryOrder[a.category] ?? 999) : 999
-      const catB = b.category ? (categoryOrder[b.category] ?? 999) : 999
-      if (catA !== catB) return catA - catB
+      if (sortMode === 'frequency') {
+        // Higher pass count first; nulls (precompute pending) sink to the bottom.
+        const fa = a.passes_24h ?? -1
+        const fb = b.passes_24h ?? -1
+        if (fa !== fb) return fb - fa
+        return a.name.localeCompare(b.name)
+      }
+      // Entry mode: earlier entry first. Already-overhead satellites have
+      // entry_time = request time, so they cluster at the top per ADR-018.
+      const ta = Date.parse(a.entry_time)
+      const tb = Date.parse(b.entry_time)
+      if (ta !== tb) return ta - tb
       return a.name.localeCompare(b.name)
     })
 
@@ -459,6 +476,27 @@ export function SatellitePanel({
       </label>
     )
 
+    const sortToggle = (
+      <div className="sort-toggle">
+        <span className="sort-toggle-label">{t('panel.sortLabel')}</span>
+        <button
+          type="button"
+          className={`sort-toggle-btn${sortMode === 'entry' ? ' active' : ''}`}
+          onClick={() => setSortMode('entry')}
+        >
+          {t('panel.sortEntry')}
+        </button>
+        <button
+          type="button"
+          className={`sort-toggle-btn${sortMode === 'frequency' ? ' active' : ''}`}
+          onClick={() => setSortMode('frequency')}
+          disabled={!frequencyAvailable}
+        >
+          {t('panel.sortFrequency')}
+        </button>
+      </div>
+    )
+
     if (!data || data.length === 0)
       return (
         <>
@@ -470,6 +508,7 @@ export function SatellitePanel({
     return (
       <>
         {includeToggle}
+        {sortToggle}
         {presentCategories.length > 1 && (
           <div className="category-tabs">
             <button

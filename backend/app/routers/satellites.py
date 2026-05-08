@@ -9,6 +9,7 @@ from app.models.satellite import SatelliteCategory
 from app.services import boundaries, cache
 from app.services.overhead_simulation import simulate_overhead_window
 from app.services.tle_ingest import POSITIONS_ALL_CACHE_KEY
+from app.services.visit_frequency import _visits_key
 
 router = APIRouter(prefix="/satellites", tags=["satellites"])
 
@@ -44,6 +45,7 @@ class SatelliteOverhead(BaseModel):
     line2: str
     entry_time: datetime
     exit_time: datetime
+    passes_24h: int | None  # ADR-019; None when precompute hasn't run yet
 
 
 @router.get("/overhead/{country_code}", response_model=list[SatelliteOverhead])
@@ -105,6 +107,15 @@ async def get_overhead(
 
     windowed = await asyncio.to_thread(simulate_overhead_window, cc, all_positions, now)
 
+    # ADR-019: enrich with 24h pass counts. One HMGET per overhead request,
+    # not per satellite. If the visit precompute hasn't run yet, all values
+    # come back None and the field gracefully degrades to null in the response.
+    norad_fields = [str(p["norad_id"]) for p in windowed]
+    pass_counts_raw = await cache.cache_hash_mget(_visits_key(cc), norad_fields)
+    pass_counts: list[int | None] = [
+        int(v) if v is not None else None for v in pass_counts_raw
+    ]
+
     result = [
         SatelliteOverhead(
             norad_id=p["norad_id"],
@@ -123,8 +134,9 @@ async def get_overhead(
             line2=p["line2"],
             entry_time=p["entry_time"],
             exit_time=p["exit_time"],
+            passes_24h=pass_counts[i],
         )
-        for p in windowed
+        for i, p in enumerate(windowed)
     ]
 
     await cache.cache_set(

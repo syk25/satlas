@@ -12,7 +12,12 @@
     "count_one": "{{count}} satellite overhead",
     "count_other": "{{count}} satellites overhead",
     "updatedAt": "As of {{time}} UTC",
-    "includeInactive": "Show rocket bodies & debris"
+    "includeInactive": "Show rocket bodies & debris",
+    "sortLabel": "Sort by",
+    "sortEntry": "Entry time",
+    "sortFrequency": "Visit frequency",
+    "passes24h_one": "{{count}} pass / 24h",
+    "passes24h_other": "{{count}} passes / 24h"
   },
   "satellite": {
     "norad": "NORAD {{id}}",

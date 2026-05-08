@@ -25,6 +25,7 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-013](ADR-013-satellite-categorization.md) | Satellite Categorization | Accepted |
 | [ADR-017](ADR-017-satellite-metadata-pipeline.md) | Satellite Metadata Pipeline — CelesTrak GP JSON + SATCAT | Accepted |
 | [ADR-018](ADR-018-overhead-membership-refresh.md) | Overhead Membership Refresh — Server-Window Prediction + Client-Side Gating | Accepted |
+| [ADR-019](ADR-019-visit-frequency-sort.md) | Visit Frequency Sort — 24-hour Pass Count per Country | Accepted |
 
 ---
 

@@ -1,4 +1,7 @@
+import asyncio
+import logging
 import secrets
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,11 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.services.tle_ingest import (
+    _fetch_position_rows,
     get_satcat_size,
     ingest_feed,
     parse_satcat_csv,
     set_satcat_cache,
 )
+from app.services.visit_frequency import compute_24h_visits, store_visits
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -79,3 +86,50 @@ async def push_satcat(request: Request) -> dict:
         )
     set_satcat_cache(satcat)
     return {"entries": get_satcat_size()}
+
+
+@router.post("/visits/recompute")
+async def recompute_visits(
+    request: Request,
+    db: AsyncSession = Depends(get_db),  # noqa: B008
+) -> dict:
+    """Recompute 24-hour pass counts per country (ADR-019).
+
+    Called by GitHub Actions after the final TLE feed push, so the result
+    reflects the freshly ingested catalog. The sweep takes ~5 minutes on
+    16k+ satellites; runs in a worker thread to keep the event loop free.
+    """
+    _verify_token(request)
+
+    rows = await _fetch_position_rows(db)
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No satellites in DB yet.",
+        )
+
+    satellites = [
+        {"norad_id": r[0], "line1": r[10].strip(), "line2": r[11].strip()} for r in rows
+    ]
+
+    t0 = time.time()
+    visits = await asyncio.to_thread(compute_24h_visits, satellites)
+    elapsed = time.time() - t0
+    pairs = await store_visits(visits)
+
+    logger.info(
+        "visits/recompute: %d satellites, %d countries, %d pairs in %.1fs",
+        len(satellites),
+        len(visits),
+        pairs,
+        elapsed,
+    )
+    if elapsed > 600:
+        logger.warning("visits/recompute exceeded 10 minutes: %.1fs", elapsed)
+
+    return {
+        "satellites": len(satellites),
+        "countries": len(visits),
+        "pairs": pairs,
+        "elapsed_seconds": round(elapsed, 1),
+    }

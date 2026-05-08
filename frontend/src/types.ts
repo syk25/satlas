@@ -45,4 +45,7 @@ export interface SatelliteOverhead {
   line2: string
   entry_time: string
   exit_time: string
+  passes_24h: number | null
 }
+
+export type OverheadSort = 'entry' | 'frequency'
