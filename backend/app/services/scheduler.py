@@ -152,10 +152,14 @@ def start_scheduler(seed_immediately: bool = False) -> None:
     _scheduler.add_job(
         warm_positions_job, IntervalTrigger(seconds=60), id="warm_positions"
     )
-    # ADR-020: keep every country's /overhead default-case cache warm.
-    _scheduler.add_job(
-        prewarm_overhead_job, IntervalTrigger(minutes=15), id="prewarm_overhead"
-    )
+    # ADR-020 prewarm DISABLED — production rollout caused 502s (thread-pool
+    # contention between the per-country sweep and incoming /overhead requests
+    # before the first cycle could complete). Prewarm needs to be redesigned
+    # before re-enabling: chunked yielding, dedicated executor, or out-of-process
+    # worker. See follow-up ADR.
+    # _scheduler.add_job(
+    #     prewarm_overhead_job, IntervalTrigger(minutes=15), id="prewarm_overhead"
+    # )
     if seed_immediately:
         run_at = datetime.now(timezone.utc) + timedelta(seconds=5)
         _scheduler.add_job(refresh_tle_job, DateTrigger(run_date=run_at), id="tle_seed")
@@ -163,14 +167,6 @@ def start_scheduler(seed_immediately: bool = False) -> None:
     boot_at = datetime.now(timezone.utc) + timedelta(seconds=10)
     _scheduler.add_job(
         warm_positions_job, DateTrigger(run_date=boot_at), id="warm_positions_boot"
-    )
-    # First prewarm runs 30s after boot — gives warm_positions_job time to
-    # populate POSITIONS_ALL_CACHE_KEY first.
-    prewarm_boot_at = datetime.now(timezone.utc) + timedelta(seconds=30)
-    _scheduler.add_job(
-        prewarm_overhead_job,
-        DateTrigger(run_date=prewarm_boot_at),
-        id="prewarm_overhead_boot",
     )
     _scheduler.start()
 
