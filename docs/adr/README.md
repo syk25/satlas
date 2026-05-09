@@ -23,6 +23,9 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-011](ADR-011-logging-strategy.md) | Logging Strategy — structlog, JSON in Production | Accepted |
 | [ADR-012](ADR-012-frontend-map-library.md) | Frontend Map Library | Accepted |
 | [ADR-013](ADR-013-satellite-categorization.md) | Satellite Categorization | Accepted |
+| [ADR-014](ADR-014-deployment-platform.md) | Deployment Platform — Fly.io (Backend) + Vercel (Frontend) | Accepted |
+| [ADR-015](ADR-015-tle-ingest-push-model.md) | TLE Ingestion via GitHub Actions Push Model | Accepted |
+| [ADR-016](ADR-016-positions-precache.md) | Satellite Positions Pre-cache | Accepted |
 | [ADR-017](ADR-017-satellite-metadata-pipeline.md) | Satellite Metadata Pipeline — CelesTrak GP JSON + SATCAT | Accepted |
 | [ADR-018](ADR-018-overhead-membership-refresh.md) | Overhead Membership Refresh — Server-Window Prediction + Client-Side Gating | Accepted |
 | [ADR-019](ADR-019-visit-frequency-sort.md) | Visit Frequency Sort — 24-hour Pass Count per Country | Accepted |
