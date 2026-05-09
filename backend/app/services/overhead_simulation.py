@@ -19,7 +19,9 @@ from app.services import boundaries
 from app.services.position import _eci_to_geodetic
 
 WINDOW_MINUTES = 30
-SAMPLE_INTERVAL_SECONDS = 60
+# 90s (was 60s in ADR-018) — see ADR-020. Cuts SGP4 calls per request by ~33%.
+# Entry/exit timing accuracy degrades from ±30s to ±45s, hidden by 1Hz client gating.
+SAMPLE_INTERVAL_SECONDS = 90
 
 _EARTH_RADIUS_KM = 6371.0
 _MU_KM3_S2 = 398600.4418

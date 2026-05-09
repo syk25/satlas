@@ -25,5 +25,5 @@ primary_region = "sjc"  # San Jose — CelesTrak blocks NRT IPs for large feeds 
     soft_limit = 80
 
 [[vm]]
-  size = "shared-cpu-1x"
+  size = "shared-cpu-2x"   # ADR-020 — needed for overhead prewarm headroom
   memory = "512mb"

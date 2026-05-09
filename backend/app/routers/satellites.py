@@ -13,10 +13,11 @@ from app.services.visit_frequency import _visits_key
 
 router = APIRouter(prefix="/satellites", tags=["satellites"])
 
-# 5-min server-side cache per (country, category, include_inactive) — see ADR-018.
-# Window is 30min, refresh cadence on the client is 15min, so 5min server TTL
-# bounds first-request cost without letting TLE drift become visible.
-OVERHEAD_CACHE_TTL = 300
+# 20-min cache per (country, category, include_inactive). ADR-020 introduced
+# a 15-min scheduler that prewarms the default-case cache for every country;
+# TTL must be longer than the prewarm interval so a slow tick cannot leave
+# the cache empty between cycles.
+OVERHEAD_CACHE_TTL = 1200
 POSITIONS_CACHE_TTL = 60
 POSITIONS_CACHE_KEY = "satlas:positions"
 
