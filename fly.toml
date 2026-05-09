@@ -26,4 +26,6 @@ primary_region = "sjc"  # San Jose — CelesTrak blocks NRT IPs for large feeds 
 
 [[vm]]
   size = "shared-cpu-2x"   # ADR-020 — needed for overhead prewarm headroom
-  memory = "512mb"
+  memory = "1024mb"        # raised from 512mb: TLE refresh OOMed after the
+                           # 13th feed (planet) once SATCAT 68k cache + per-feed
+                           # OMM/upsert buffers + warm_positions_cache stacked.
