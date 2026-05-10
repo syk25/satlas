@@ -2,7 +2,7 @@ import asyncio
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from app.models.satellite import SatelliteCategory
@@ -82,7 +82,12 @@ async def get_overhead(
     )
     cached = await cache.cache_get(cache_key)
     if cached is not None:
-        return [SatelliteOverhead(**item) for item in json.loads(cached)]
+        # Cache holds an already-serialized JSON array written by the prewarm
+        # worker using SatelliteOverhead.model_dump(mode="json"). Skip the
+        # parse → Pydantic re-construct → re-serialize round-trip — for large
+        # countries (CN/US/RU at ~2000 satellites) that round-trip is the
+        # dominant cost on cache hit.
+        return Response(content=cached, media_type="application/json")
 
     all_json = await cache.cache_get(POSITIONS_ALL_CACHE_KEY)
     if all_json is None:
