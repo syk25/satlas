@@ -31,6 +31,7 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-019](ADR-019-visit-frequency-sort.md) | Visit Frequency Sort — 24-hour Pass Count per Country | Accepted |
 | [ADR-020](ADR-020-overhead-prewarm-and-vm-upgrade.md) | Overhead Prewarm + shared-cpu-2x VM Upgrade | Accepted |
 | [ADR-021](ADR-021-celery-worker-for-prewarm.md) | Celery Worker for Overhead Prewarm | Accepted |
+| [ADR-022](ADR-022-prewarm-sgp4-dedup.md) | Hoist SGP4 Propagation Out of Per-Country Prewarm | Accepted |
 
 ---
 

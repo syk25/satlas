@@ -123,3 +123,13 @@ Effects:
 - Cache fills incrementally — users see fresh data as countries complete instead of waiting for the whole sweep.
 
 Task-name compatibility was preserved (`app.tasks.prewarm_overhead_all_countries` still exists and is what beat fires), so any in-flight messages on the broker at deploy time still resolve to a registered handler. The task body is just radically smaller.
+
+---
+
+## Subsequent reversal — fan-out collapsed (2026-05-10, see ADR-022)
+
+Later the same day, end-to-end measurement showed minor territories were still missing the cache. The fan-out wasn't the bottleneck — every per-country task was redoing identical SGP4 propagations, and a single `--concurrency=1` worker could not finish 234 of those before the 20-min cache TTL expired. Attempting to scale the worker (shared-cpu-2x, `--concurrency=2`) triggered Fly's burst-credit baseline drop and per-task time went *up* by 10-25×.
+
+ADR-022 hoists propagation out of the per-country path entirely: one SGP4 batch over the whole catalog, then a polygon-only pass per country reusing those positions. Once that change landed, the per-country task was no longer slow enough to need fan-out; `prewarm_overhead_one_country` was removed and `prewarm_overhead_all_countries` became a single end-to-end sweep again — same task name beat already fires, just doing the whole job in-process.
+
+The reasoning that drove the fan-out (long per-task SGP4 work blowing the time limit) was sound under the old work shape. Once the work shape changed, the fan-out's cost (per-task overhead, scattered cache state, harder failure attribution) outweighed the benefit. Architectural artifacts that solve a now-absent problem are still cost.
