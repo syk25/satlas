@@ -63,10 +63,11 @@ Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE 
 - [x] SGP4-based position calculation and country boundary intersection
 - [x] `GET /satellites/overhead/{country_code}` — overhead satellites by country
 - [x] `GET /satellites/positions` — all satellite positions (global map view)
-- [x] Redis caching (60 s TTL per country, graceful degradation)
+- [x] Redis caching (positions cache 60 s warm cycle, per-country overhead cache 20 min TTL, graceful degradation)
 - [x] Scheduled TLE ingestion (APScheduler, twice daily at 00:00 / 12:00 UTC)
 - [x] Frontend MVP (Leaflet 2D map · country click · satellite markers · i18n en/ko)
-- [ ] Deployment (Fly.io + Vercel)
+- [x] Deployment (Fly.io + Vercel)
+- [x] Background prewarm pipeline (Celery worker + beat, single batched SGP4 sweep every 15 min, sub-2 s response across all 234 territories)
 
 ---
 
