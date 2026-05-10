@@ -151,3 +151,85 @@ def simulate_overhead_window(
         results.append({**sat, "entry_time": entry, "exit_time": exit_t})
 
     return results
+
+
+def compute_window_positions(
+    candidates: list[dict[str, Any]],
+    now: datetime,
+    window_minutes: int = WINDOW_MINUTES,
+    sample_interval_seconds: int = SAMPLE_INTERVAL_SECONDS,
+) -> list[dict[str, Any]]:
+    """Propagate each candidate at every sample time once.
+
+    The per-country `simulate_overhead_window` propagates the same satellite at
+    the same sample times for every country. When the prewarm sweep runs across
+    200 territories that means ~200× redundant SGP4 work. Hoisting the
+    propagation out lets the sweep do it once and have each country pay only
+    the polygon-containment cost.
+
+    Returns the candidate dicts with an extra `samples` key:
+    `[(t0, lat0, lon0), (t1, lat1, lon1), ...]` where t0 == now.
+    """
+    n_extra_samples = window_minutes * 60 // sample_interval_seconds
+    sample_times = [
+        now + timedelta(seconds=i * sample_interval_seconds)
+        for i in range(n_extra_samples + 1)
+    ]
+
+    enriched: list[dict[str, Any]] = []
+    for sat in candidates:
+        line1 = sat["line1"]
+        line2 = sat["line2"]
+        # Reuse the t=0 snapshot lat/lon — saves one SGP4 call per satellite.
+        samples: list[tuple[datetime, float, float] | tuple[datetime, None, None]] = [
+            (now, sat["lat"], sat["lon"])
+        ]
+        for t in sample_times[1:]:
+            pos = _propagate(line1, line2, t)
+            if pos is None:
+                samples.append((t, None, None))
+            else:
+                samples.append((t, pos[0], pos[1]))
+        enriched.append({**sat, "samples": samples})
+    return enriched
+
+
+def find_overhead_in_window(
+    country_code: str,
+    window_positions: list[dict[str, Any]],
+    request_time: datetime,
+) -> list[dict[str, Any]]:
+    """Polygon-only pass over already-propagated positions.
+
+    Counterpart to `compute_window_positions` — same output shape as
+    `simulate_overhead_window` but no SGP4 inside.
+    """
+    cc = country_code.upper()
+    territory = boundaries._country_polygons.get(cc)
+    if territory is None:
+        return []
+
+    _, miny, _, maxy = territory.bounds
+
+    results: list[dict[str, Any]] = []
+    for sat in window_positions:
+        if not _can_reach_territory(sat["line2"], miny, maxy):
+            continue
+
+        samples_inside: list[tuple[datetime, bool]] = []
+        for t, lat, lon in sat["samples"]:
+            if lat is None or lon is None:
+                samples_inside.append((t, False))
+            else:
+                samples_inside.append((t, boundaries.is_over_country(lat, lon, cc)))
+
+        pair = _find_entry_exit(samples_inside, request_time)
+        if pair is None:
+            continue
+
+        entry, exit_t = pair
+        # Strip the heavy `samples` field before yielding the result.
+        sat_out = {k: v for k, v in sat.items() if k != "samples"}
+        results.append({**sat_out, "entry_time": entry, "exit_time": exit_t})
+
+    return results
