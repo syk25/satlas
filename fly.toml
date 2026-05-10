@@ -12,20 +12,40 @@ primary_region = "sjc"  # San Jose — CelesTrak blocks NRT IPs for large feeds 
 [deploy]
   release_command = "alembic upgrade head"
 
+# ADR-021: three process groups, each on its own machine.
+[processes]
+  app = "uvicorn app.main:app --host 0.0.0.0 --port 8080"
+  worker = "celery -A app.celery_app worker --loglevel=info --concurrency=1"
+  beat = "celery -A app.celery_app beat --loglevel=info"
+
 [http_service]
   internal_port = 8080
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 1
+  processes = ["app"]   # only the API serves HTTP
 
   [http_service.concurrency]
     type = "requests"
     hard_limit = 100
     soft_limit = 80
 
+# API: needs CPU headroom for SGP4 + handles user requests.
 [[vm]]
-  size = "shared-cpu-2x"   # ADR-020 — needed for overhead prewarm headroom
-  memory = "1024mb"        # raised from 512mb: TLE refresh OOMed after the
-                           # 13th feed (planet) once SATCAT 68k cache + per-feed
-                           # OMM/upsert buffers + warm_positions_cache stacked.
+  processes = ["app"]
+  size = "shared-cpu-2x"
+  memory = "1024mb"
+
+# Worker: runs the 15-min prewarm sweep. Memory budget covers SATCAT-free
+# polygon + STRtree + 16k position dicts + simulate_overhead_window scratch.
+[[vm]]
+  processes = ["worker"]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+# Beat: holds only the schedule + emits task dispatches. Tiny.
+[[vm]]
+  processes = ["beat"]
+  size = "shared-cpu-1x"
+  memory = "256mb"
