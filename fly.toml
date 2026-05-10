@@ -15,7 +15,7 @@ primary_region = "sjc"  # San Jose — CelesTrak blocks NRT IPs for large feeds 
 # ADR-021: three process groups, each on its own machine.
 [processes]
   app = "uvicorn app.main:app --host 0.0.0.0 --port 8080"
-  worker = "celery -A app.celery_app worker --loglevel=info --concurrency=1"
+  worker = "celery -A app.celery_app worker --loglevel=info --concurrency=2"
   beat = "celery -A app.celery_app beat --loglevel=info"
 
 [http_service]
@@ -37,12 +37,13 @@ primary_region = "sjc"  # San Jose — CelesTrak blocks NRT IPs for large feeds 
   size = "shared-cpu-2x"
   memory = "1024mb"
 
-# Worker: runs the 15-min prewarm sweep. Memory budget covers SATCAT-free
-# polygon + STRtree + 16k position dicts + simulate_overhead_window scratch.
+# Worker: runs the 15-min prewarm sweep. Two vCPUs let two per-country
+# SGP4 sweeps run in parallel (concurrency=2), halving the time-to-warm so
+# every country fits inside the 15-min beat cycle and 20-min TTL window.
 [[vm]]
   processes = ["worker"]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = "shared-cpu-2x"
+  memory = "1024mb"
 
 # Beat: holds only the schedule + emits task dispatches. Tiny.
 [[vm]]

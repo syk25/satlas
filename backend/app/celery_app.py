@@ -12,7 +12,7 @@ import logging
 from datetime import timedelta
 
 from celery import Celery
-from celery.signals import worker_process_init
+from celery.signals import beat_init, worker_process_init
 
 from app.config import settings
 
@@ -40,6 +40,17 @@ celery_app.conf.beat_schedule = {
         "schedule": timedelta(minutes=15),
     },
 }
+
+
+@beat_init.connect
+def _kickstart_prewarm(**_kwargs) -> None:
+    """Fire the prewarm fan-out once when beat boots so a fresh deploy
+    doesn't leave the cache cold for up to one full schedule interval.
+    Runs only in the beat process; beat is single-instance by design."""
+    from app.tasks import prewarm_overhead_all_countries
+
+    prewarm_overhead_all_countries.delay()
+    logger.info("beat_init: kickstarted prewarm fanout")
 
 
 @worker_process_init.connect
