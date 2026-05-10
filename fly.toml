@@ -37,15 +37,16 @@ primary_region = "sjc"  # San Jose — CelesTrak blocks NRT IPs for large feeds 
   size = "shared-cpu-2x"
   memory = "1024mb"
 
-# Worker: runs the 15-min prewarm sweep. Stays on shared-cpu-1x:512mb with
+# Worker: runs the 15-min prewarm sweep. Stays on shared-cpu-1x with
 # concurrency=1 — Fly's shared-CPU burst-credit model penalizes sustained
 # parallel CPU work (concurrency=2 dropped each task to baseline = 10× per-task
-# slowdown in practice). A single sweep finishes in ~13 min, comfortably
-# inside the 20-min cache TTL.
+# slowdown in practice). Memory bumped 512mb → 1024mb so ADR-022's hoisted
+# window-positions array (~10MB samples × Python overhead) fits alongside the
+# boundary STRtree without OOM-kill loops.
 [[vm]]
   processes = ["worker"]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  memory = "1024mb"
 
 # Beat: holds only the schedule + emits task dispatches. Tiny.
 [[vm]]
