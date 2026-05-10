@@ -1,7 +1,7 @@
-"""Unit tests for the Celery prewarm task body (ADR-021).
+"""Unit tests for the Celery prewarm tasks (ADR-021).
 
-Tests target the async coroutine `_run_prewarm` directly — Celery's sync
-wrapper just calls `asyncio.run`, which we don't need to validate.
+The fan-out task is sync; the per-country worker body is async (run via
+asyncio.run by Celery), so it's tested directly as a coroutine.
 """
 
 import json
@@ -22,7 +22,7 @@ def _polygons():
 
 @pytest.fixture
 def cache_module():
-    """Patch out the Redis-touching helpers used by _run_prewarm."""
+    """Patch the Redis-touching helpers used by _run_one."""
     with (
         patch("app.services.cache.init_redis", new_callable=AsyncMock),
         patch("app.services.cache.close_redis", new_callable=AsyncMock),
@@ -33,18 +33,23 @@ def cache_module():
         yield {"get": mget, "set": mset, "hmget": mhmget}
 
 
-@pytest.mark.asyncio
-async def test_prewarm_skips_when_positions_cache_empty(cache_module):
-    cache_module["get"].return_value = None
-    from app.tasks import _run_prewarm
+# ── per-country worker (_run_one) ──
 
-    result = await _run_prewarm()
-    assert result == {"skipped": True}
+
+@pytest.mark.asyncio
+async def test_run_one_skips_when_positions_cache_empty(cache_module):
+    cache_module["get"].return_value = None
+    from app.tasks import _run_one
+
+    result = await _run_one("KR")
+
+    assert result["skipped"] is True
+    assert result["cc"] == "KR"
     cache_module["set"].assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_prewarm_writes_one_cache_entry_per_country(cache_module):
+async def test_run_one_writes_cache_when_country_has_rows(cache_module):
     sample_position = {
         "norad_id": 25544,
         "name": "ISS",
@@ -68,54 +73,73 @@ async def test_prewarm_writes_one_cache_entry_per_country(cache_module):
 
     cache_module["hmget"].side_effect = fake_hmget
 
-    # Stub simulate_overhead_window to return one row for KR, empty elsewhere.
     def fake_simulate(cc, candidates, now):
-        if cc == "KR":
-            from datetime import timedelta
+        from datetime import timedelta
 
-            return [
-                {
-                    **sample_position,
-                    "entry_time": now,
-                    "exit_time": now + timedelta(minutes=5),
-                }
-            ]
-        return []
+        return [
+            {
+                **sample_position,
+                "entry_time": now,
+                "exit_time": now + timedelta(minutes=5),
+            }
+        ]
 
     with patch(
         "app.services.overhead_simulation.simulate_overhead_window",
         side_effect=fake_simulate,
     ):
-        from app.tasks import _run_prewarm
+        from app.tasks import _run_one
 
-        result = await _run_prewarm()
+        result = await _run_one("KR")
 
-    assert result["countries_total"] > 100  # all loaded countries
-    assert result["countries_ok"] == result["countries_total"]
-    assert result["rows"] == 1  # only KR yielded a row
-    assert result["failed"] == []
-    # cache_set was called once per country with windowed rows.
-    # Empty-result countries are skipped — only KR triggers a write.
+    assert result["cc"] == "KR"
+    assert result["rows"] == 1
     set_keys = [call.args[0] for call in cache_module["set"].call_args_list]
-    assert "satlas:overhead:KR" in set_keys
+    assert set_keys == ["satlas:overhead:KR"]
 
 
 @pytest.mark.asyncio
-async def test_prewarm_records_failures_per_country(cache_module):
+async def test_run_one_writes_empty_payload_when_no_rows(cache_module):
     cache_module["get"].return_value = json.dumps([])
 
-    def fake_simulate(cc, candidates, now):
-        if cc == "RU":
-            raise RuntimeError("synthetic boom")
-        return []
+    async def fake_hmget(_key, fields):
+        return [None] * len(fields)
+
+    cache_module["hmget"].side_effect = fake_hmget
 
     with patch(
         "app.services.overhead_simulation.simulate_overhead_window",
-        side_effect=fake_simulate,
+        return_value=[],
     ):
-        from app.tasks import _run_prewarm
+        from app.tasks import _run_one
 
-        result = await _run_prewarm()
+        result = await _run_one("KR")
 
-    assert "RU" in result["failed"]
-    assert result["countries_ok"] == result["countries_total"] - 1
+    assert result["rows"] == 0
+    # Empty result still gets cached so users see "no satellites" instantly
+    # instead of falling through to a 5-second lazy path.
+    set_keys = [call.args[0] for call in cache_module["set"].call_args_list]
+    assert set_keys == ["satlas:overhead:KR"]
+
+
+# ── fan-out dispatcher ──
+
+
+def test_fanout_dispatches_one_task_per_country():
+    """The beat-fired task should call .delay() once per loaded country and
+    return the dispatched count."""
+    from app.tasks import (
+        prewarm_overhead_all_countries,
+        prewarm_overhead_one_country,
+    )
+
+    with patch.object(prewarm_overhead_one_country, "delay") as mock_delay:
+        result = prewarm_overhead_all_countries()
+
+    assert result["countries_dispatched"] > 100  # 200+ countries loaded
+    assert mock_delay.call_count == result["countries_dispatched"]
+    # Every dispatched call carries a country code string (ISO-A2 plus the
+    # disputed-territory codes from ADR-003, e.g. "CN-TW").
+    for call in mock_delay.call_args_list:
+        cc = call.args[0]
+        assert isinstance(cc, str) and 2 <= len(cc) <= 8

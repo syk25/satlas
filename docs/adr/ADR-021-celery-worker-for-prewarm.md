@@ -103,3 +103,23 @@ Rejected: the work to wire Celery once is roughly the work to wire it now. Doing
 - Sentry must be initialized in the worker boot path too — silent worker failures are worse than silent API failures because there's no user feedback loop.
 - ADR-020's TTL of 20 minutes still pairs correctly with the 15-minute beat schedule: a missed beat tick can leave the cache empty for at most 5 minutes before the next tick refills.
 - If the `beat` machine is overkill (one process holding only the beat scheduler), revisit by collapsing beat into the API process via `apscheduler` triggering a Celery `send_task`. Keep this as a possible Phase 2 simplification rather than a starting point — beat-as-its-own-process is the textbook Celery pattern and we're paying ~$3/mo to keep it textbook.
+
+---
+
+## Post-deploy adjustment — fan-out per country (2026-05-10)
+
+The first production rollout of this ADR shipped a single beat-fired task that processed all 200 countries serially in one worker. Verification found the task running for 30+ minutes with `acknowledged: False` while only 4 country caches had been written; the task time limit didn't catch it cleanly and `task_acks_late=True` caused the broker to redeliver after each kill, producing an infinite-restart loop.
+
+The work unit was simply too big for one Celery task on a `shared-cpu-1x` worker. Fixed by splitting into a fan-out:
+
+- `prewarm_overhead_all_countries` (beat-fired): dispatches one `prewarm_overhead_one_country.delay(cc)` per loaded country, returns immediately. Effectively a queue-fill operation.
+- `prewarm_overhead_one_country(cc)`: does the actual SGP4 simulation and cache write for one country. Each invocation finishes in seconds.
+
+Effects:
+
+- Workers process per-country tasks **in parallel** across processes — the two existing worker machines now actually share the load.
+- A single hanging country no longer blocks the rest of the cycle; failures stay scoped.
+- Hard-kill no longer applies in practice because individual tasks are short.
+- Cache fills incrementally — users see fresh data as countries complete instead of waiting for the whole sweep.
+
+Task-name compatibility was preserved (`app.tasks.prewarm_overhead_all_countries` still exists and is what beat fires), so any in-flight messages on the broker at deploy time still resolve to a registered handler. The task body is just radically smaller.
