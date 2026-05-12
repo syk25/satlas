@@ -37,7 +37,7 @@ Previously, answering this question required checking each satellite's orbit ind
 |---|---|
 | Backend | Python 3.11 · FastAPI · PostgreSQL · Redis · Celery · APScheduler · SGP4 |
 | Frontend | React · Vite · TypeScript · Leaflet · satellite.js |
-| Infra | Docker Compose · Fly.io · Vercel · Upstash · Cloudflare · GitHub Actions |
+| Infra | Docker Compose · Fly.io · Vercel · Cloudflare · GitHub Actions |
 | Data | CelesTrak (TLE) · Natural Earth (GeoJSON) |
 
 ---
@@ -64,10 +64,12 @@ Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE 
 - [x] `GET /satellites/overhead/{country_code}` — overhead satellites by country
 - [x] `GET /satellites/positions` — all satellite positions (global map view)
 - [x] Redis caching (positions cache 60 s warm cycle, per-country overhead cache 20 min TTL, graceful degradation)
-- [x] Scheduled TLE ingestion (APScheduler, twice daily at 00:00 / 12:00 UTC)
+- [x] Scheduled TLE ingestion (GitHub Actions push model, twice daily at 00:00 / 12:00 UTC — ADR-015)
 - [x] Frontend MVP (Leaflet 2D map · country click · satellite markers · i18n en/ko)
 - [x] Deployment (Fly.io + Vercel)
 - [x] Background prewarm pipeline (Celery worker + beat, single batched SGP4 sweep every 15 min, sub-2 s response across all 234 territories)
+- [x] `GET /satellites/passes/{country_code}` — 24-hour pass timeline per country
+- [x] Pass schedule UI (panel tab, 1 h / 6 h / 24 h grouping)
 
 ---
 

@@ -17,13 +17,17 @@ async def test_refresh_clears_cache_when_snapshots_stored():
             "app.services.scheduler.cache_clear_pattern",
             new_callable=AsyncMock,
         ) as mock_clear,
+        patch(
+            "app.services.scheduler.warm_positions_cache",
+            new_callable=AsyncMock,
+        ),
         patch("app.services.scheduler.AsyncSessionLocal"),
     ):
         await refresh_tle_job()
 
     assert mock_clear.call_count == 2
     mock_clear.assert_any_call("satlas:overhead:*")
-    mock_clear.assert_any_call("satlas:positions")
+    mock_clear.assert_any_call("satlas:positions*")
 
 
 @pytest.mark.asyncio
