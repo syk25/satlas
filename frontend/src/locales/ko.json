@@ -19,6 +19,18 @@
     "passes24h_one": "24시간 내 {{count}}회 통과",
     "passes24h_other": "24시간 내 {{count}}회 통과"
   },
+  "tabs": {
+    "overhead": "현재 상공",
+    "schedule": "통과 일정"
+  },
+  "schedule": {
+    "withinHour": "1시간 이내",
+    "within6Hours": "6시간 이내",
+    "within24Hours": "24시간 이내",
+    "noPasses": "향후 24시간 통과 예정 없음",
+    "total_one": "예정 통과 {{count}}회",
+    "total_other": "예정 통과 {{count}}회"
+  },
   "satellite": {
     "norad": "NORAD {{id}}",
     "unknownOperator": "미상",

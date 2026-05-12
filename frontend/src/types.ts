@@ -49,3 +49,14 @@ export interface SatelliteOverhead {
 }
 
 export type OverheadSort = 'entry' | 'frequency'
+
+export interface SatellitePass {
+  norad_id: number
+  name: string | null
+  category: SatelliteCategory | null
+  orbit_class: string | null
+  entry_time: string
+  exit_time: string
+}
+
+export type PanelTab = 'overhead' | 'schedule'

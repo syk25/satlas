@@ -31,6 +31,9 @@ class SatellitePosition(BaseModel):
 
 class SatellitePass(BaseModel):
     norad_id: int
+    name: str | None = None
+    category: str | None = None
+    orbit_class: str | None = None
     entry_time: datetime
     exit_time: datetime
 

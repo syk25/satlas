@@ -97,6 +97,12 @@ def compute_24h_passes(
         norad_id = sat["norad_id"]
         line1 = sat["line1"]
         line2 = sat["line2"]
+        # Metadata is propagated into events so the passes endpoint can
+        # render a row without a second lookup. Optional via .get() so
+        # tests and internal callers can still pass minimal sat dicts.
+        name = sat.get("name")
+        category = sat.get("category")
+        orbit_class = sat.get("orbit_class")
 
         prev_country: str | None = None
         entry_time: datetime | None = None
@@ -117,6 +123,9 @@ def compute_24h_passes(
                     passes.setdefault(prev_country, []).append(
                         {
                             "norad_id": norad_id,
+                            "name": name,
+                            "category": category,
+                            "orbit_class": orbit_class,
                             "entry_time": entry_time,
                             "exit_time": t,
                         }
@@ -133,6 +142,9 @@ def compute_24h_passes(
             passes.setdefault(prev_country, []).append(
                 {
                     "norad_id": norad_id,
+                    "name": name,
+                    "category": category,
+                    "orbit_class": orbit_class,
                     "entry_time": entry_time,
                     "exit_time": window_end,
                 }
@@ -181,6 +193,9 @@ async def store_passes(passes: dict[str, list[dict[str, Any]]]) -> tuple[int, in
             [
                 {
                     "norad_id": ev["norad_id"],
+                    "name": ev.get("name"),
+                    "category": ev.get("category"),
+                    "orbit_class": ev.get("orbit_class"),
                     "entry_time": ev["entry_time"].isoformat().replace("+00:00", "Z"),
                     "exit_time": ev["exit_time"].isoformat().replace("+00:00", "Z"),
                 }

@@ -19,6 +19,18 @@
     "passes24h_one": "{{count}} pass / 24h",
     "passes24h_other": "{{count}} passes / 24h"
   },
+  "tabs": {
+    "overhead": "Overhead now",
+    "schedule": "Pass schedule"
+  },
+  "schedule": {
+    "withinHour": "Within 1 hour",
+    "within6Hours": "Within 6 hours",
+    "within24Hours": "Within 24 hours",
+    "noPasses": "No passes scheduled in the next 24 hours",
+    "total_one": "{{count}} upcoming pass",
+    "total_other": "{{count}} upcoming passes"
+  },
   "satellite": {
     "norad": "NORAD {{id}}",
     "unknownOperator": "Unknown",

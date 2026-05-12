@@ -336,6 +336,149 @@ html, body, #root {
   cursor: not-allowed;
 }
 
+/* ── Panel tab toggle (Overhead / Schedule) ── */
+.panel-tabs {
+  display: flex;
+  gap: 1px;
+  padding: 0 16px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-tab {
+  flex: 1;
+  padding: 8px 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.panel-tab:hover {
+  color: var(--text-primary);
+}
+
+.panel-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Pass schedule view ── */
+.pass-schedule {
+  display: flex;
+  flex-direction: column;
+}
+
+.pass-section {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pass-section:last-child {
+  border-bottom: none;
+}
+
+.pass-section-title {
+  margin: 0;
+  padding: 4px 16px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pass-section-count {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.pass-section-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.pass-row {
+  display: flex;
+  gap: 12px;
+  padding: 8px 16px;
+  align-items: baseline;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.pass-row:last-child {
+  border-bottom: none;
+}
+
+.pass-row-time {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 88px;
+}
+
+.pass-row-time-range {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.pass-row-duration {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pass-row-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pass-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pass-row-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.pass-row-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* ── Satellite detail & tracking ── */
 .sat-detail {
   padding: 16px;

@@ -3,7 +3,8 @@ import { Navbar } from './components/Navbar'
 import { SatellitePanel } from './components/SatellitePanel'
 import { WorldMap } from './components/WorldMap'
 import { useOverheadSatellites } from './hooks/useOverheadSatellites'
-import type { SatelliteCategory, SatelliteOverhead } from './types'
+import { usePassSchedule } from './hooks/usePassSchedule'
+import type { PanelTab, SatelliteCategory, SatelliteOverhead } from './types'
 
 const GATING_TICK_MS = 1000
 
@@ -20,11 +21,13 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<SatelliteCategory | null>(null)
   const [satOffMapDir, setSatOffMapDir] = useState<'north' | 'south' | null>(null)
   const [includeInactive, setIncludeInactive] = useState(false)
+  const [panelTab, setPanelTab] = useState<PanelTab>('overhead')
 
   const { data, loading, error } = useOverheadSatellites(
     selected?.code ?? null,
     includeInactive
   )
+  const passes = usePassSchedule(selected?.code ?? null)
 
   // ADR-018 client-side gating: from the 30-min server window, show only
   // satellites whose [entry_time, exit_time] currently contains `now`.
@@ -62,7 +65,12 @@ export default function App() {
 
   const handleCountrySelect = useCallback((code: string, name: string) => {
     setSelected((prev) => {
-      if (prev?.code !== code) setActiveCategory(null)
+      if (prev?.code !== code) {
+        setActiveCategory(null)
+        // Resetting the tab on country change avoids the schedule view
+        // briefly showing the previous country's passes during fetch.
+        setPanelTab('overhead')
+      }
       return { code, name }
     })
     setTrackedSatellite(null)
@@ -111,6 +119,11 @@ export default function App() {
           data={data === null ? null : visibleSatellites}
           loading={loading}
           error={error}
+          passes={passes.data}
+          passesLoading={passes.loading}
+          passesError={passes.error}
+          tab={panelTab}
+          onTabChange={setPanelTab}
           trackedSatellite={trackedSatellite}
           selectedSat={selectedSat}
           activeCategory={activeCategory}

@@ -38,7 +38,14 @@ class TestStrtree:
 class TestCompute24hPasses:
     def setup_method(self):
         self.now = datetime(2026, 5, 9, 12, 0, 0, tzinfo=timezone.utc)
-        self.iss = {"norad_id": 25544, "line1": ISS_LINE1, "line2": ISS_LINE2}
+        self.iss = {
+            "norad_id": 25544,
+            "name": "ISS (ZARYA)",
+            "category": "STATION",
+            "orbit_class": "LEO",
+            "line1": ISS_LINE1,
+            "line2": ISS_LINE2,
+        }
 
     def test_iss_passes_high_lat_countries(self):
         # ISS at i=51.6 sweeps everything from -52 to +52 lat. RU/CA at high
@@ -84,3 +91,22 @@ class TestCompute24hPasses:
         counts = aggregate_pass_counts(passes)
         for cc, events in passes.items():
             assert counts[cc][25544] == sum(1 for e in events if e["norad_id"] == 25544)
+
+    def test_events_carry_metadata_from_input(self):
+        # The pass schedule UI needs name + category + orbit_class without a
+        # second lookup; each event must propagate them from the input sat.
+        passes = compute_24h_passes([self.iss], now=self.now)
+        sample = next(iter(passes.values()))[0]
+        assert sample["name"] == "ISS (ZARYA)"
+        assert sample["category"] == "STATION"
+        assert sample["orbit_class"] == "LEO"
+
+    def test_events_tolerate_missing_metadata(self):
+        # Internal callers (and old tests) may pass minimal sat dicts; the
+        # event still opens/closes correctly, with metadata as None.
+        minimal = {"norad_id": 25544, "line1": ISS_LINE1, "line2": ISS_LINE2}
+        passes = compute_24h_passes([minimal], now=self.now)
+        sample = next(iter(passes.values()))[0]
+        assert sample["name"] is None
+        assert sample["category"] is None
+        assert sample["orbit_class"] is None

@@ -10,7 +10,14 @@ import {
 } from 'satellite.js'
 import { useCountryAt } from '../hooks/useCountryAt'
 import { CATEGORY_COLOR } from '../types'
-import type { OverheadSort, SatelliteCategory, SatelliteOverhead } from '../types'
+import type {
+  OverheadSort,
+  PanelTab,
+  SatelliteCategory,
+  SatelliteOverhead,
+  SatellitePass,
+} from '../types'
+import { PassScheduleView } from './PassScheduleView'
 
 interface SatPosition {
   lat: number
@@ -55,6 +62,11 @@ interface Props {
   data: SatelliteOverhead[] | null
   loading: boolean
   error: boolean
+  passes: SatellitePass[] | null
+  passesLoading: boolean
+  passesError: boolean
+  tab: PanelTab
+  onTabChange: (tab: PanelTab) => void
   trackedSatellite: SatelliteOverhead | null
   selectedSat: SatelliteOverhead | null
   activeCategory: SatelliteCategory | null
@@ -373,6 +385,11 @@ export function SatellitePanel({
   data,
   loading,
   error,
+  passes,
+  passesLoading,
+  passesError,
+  tab,
+  onTabChange,
   trackedSatellite,
   selectedSat,
   activeCategory,
@@ -462,8 +479,51 @@ export function SatellitePanel({
     if (!countryName) {
       return <p className="panel-placeholder">{t('panel.placeholder')}</p>
     }
-    if (loading) return <p className="panel-status">{t('panel.loading')}</p>
-    if (error) return <p className="panel-status panel-error">{t('panel.error')}</p>
+
+    const tabToggle = (
+      <div className="panel-tabs">
+        <button
+          type="button"
+          className={`panel-tab${tab === 'overhead' ? ' active' : ''}`}
+          onClick={() => onTabChange('overhead')}
+        >
+          {t('tabs.overhead')}
+        </button>
+        <button
+          type="button"
+          className={`panel-tab${tab === 'schedule' ? ' active' : ''}`}
+          onClick={() => onTabChange('schedule')}
+        >
+          {t('tabs.schedule')}
+        </button>
+      </div>
+    )
+
+    if (tab === 'schedule') {
+      return (
+        <>
+          {tabToggle}
+          <PassScheduleView data={passes} loading={passesLoading} error={passesError} />
+        </>
+      )
+    }
+
+    if (loading) {
+      return (
+        <>
+          {tabToggle}
+          <p className="panel-status">{t('panel.loading')}</p>
+        </>
+      )
+    }
+    if (error) {
+      return (
+        <>
+          {tabToggle}
+          <p className="panel-status panel-error">{t('panel.error')}</p>
+        </>
+      )
+    }
 
     const includeToggle = (
       <label className="include-inactive-toggle">
@@ -500,6 +560,7 @@ export function SatellitePanel({
     if (!data || data.length === 0)
       return (
         <>
+          {tabToggle}
           {includeToggle}
           <p className="panel-status">{t('panel.noSatellites')}</p>
         </>
@@ -507,6 +568,7 @@ export function SatellitePanel({
 
     return (
       <>
+        {tabToggle}
         {includeToggle}
         {sortToggle}
         {presentCategories.length > 1 && (

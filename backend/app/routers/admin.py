@@ -108,8 +108,23 @@ async def recompute_visits(
             detail="No satellites in DB yet.",
         )
 
+    # Pass-timeline consumers (the schedule view) only care about real
+    # operating satellites. Filter rocket bodies / debris up front so the
+    # serialized timeline stays compact and the visit counts stop holding
+    # dead entries that the overhead endpoint never returns. Name +
+    # category + orbit_class are propagated into events so the passes
+    # endpoint can render a row without a second lookup.
     satellites = [
-        {"norad_id": r[0], "line1": r[10].strip(), "line2": r[11].strip()} for r in rows
+        {
+            "norad_id": r[0],
+            "name": r[1],
+            "category": r[2],
+            "orbit_class": r[3],
+            "line1": r[10].strip(),
+            "line2": r[11].strip(),
+        }
+        for r in rows
+        if r[8] in (None, "PAYLOAD")
     ]
 
     t0 = time.time()
