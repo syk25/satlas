@@ -36,9 +36,24 @@ else:
 async def lifespan(app: FastAPI):
     load_country_polygons()
     await init_redis()
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(func.count()).select_from(Satellite))
-        seed = result.scalar() < 5000
+
+    # Seed check is best-effort. The upstream Postgres has been dropping
+    # connections mid-query (the same `ConnectionDoesNotExistError` we
+    # already chase down in alembic/env.py); when it does, lifespan must
+    # not crash the app. /overhead and /passes serve from Redis without
+    # touching the DB, so the API is still useful while Postgres is
+    # flaky — better to boot degraded than to refuse requests entirely.
+    seed = False
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(func.count()).select_from(Satellite))
+            seed = (result.scalar() or 0) < 5000
+    except Exception:  # noqa: BLE001 — boot-degraded; specific causes vary
+        _startup_log.exception(
+            "Seed check failed; booting without re-seed. DB-touching jobs"
+            " (warm_positions, visits/recompute) will recover when DB is reachable."
+        )
+
     start_scheduler(seed_immediately=seed)
     yield
     stop_scheduler()
