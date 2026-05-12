@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -49,16 +48,23 @@ async def warm_positions_job() -> None:
 def start_scheduler(seed_immediately: bool = False) -> None:
     """Register the in-process schedules owned by the API machine.
 
-    ADR-021: overhead prewarm has moved to a Celery worker process. This
-    scheduler only carries lightweight, request-affine work — TLE refresh
-    (12-hourly cron) and positions cache warming (every 60 s).
+    ADR-015: TLE ingest is push-model — GitHub Actions fetches CelesTrak
+    (Fly IPs are blocked from CelesTrak's larger feeds) and pushes via
+    `/admin/tle/ingest/{group}`. The in-process 00:00 / 12:00 UTC TLE
+    cron jobs were dead weight in production: every fetch attempt
+    timed out against the IP block, but the surrounding work still
+    pinned a DB session and a thread-pool slot while the 18-feed
+    retry loop ground through. Two consecutive midnight-UTC GHA push
+    runs returned 500s on ingest while these jobs were still active,
+    so they are gone.
+
+    `refresh_tle_job` is retained as a `seed_immediately` hook for
+    local dev where the DB starts empty — the dev machine is not IP
+    blocked and the fetch actually succeeds.
+
+    ADR-021: overhead prewarm has moved to a Celery worker process.
+    Scheduler now only owns positions cache warming (every 60 s).
     """
-    _scheduler.add_job(
-        refresh_tle_job, CronTrigger(hour=0, minute=0), id="tle_refresh_0000"
-    )
-    _scheduler.add_job(
-        refresh_tle_job, CronTrigger(hour=12, minute=0), id="tle_refresh_1200"
-    )
     _scheduler.add_job(
         warm_positions_job, IntervalTrigger(seconds=60), id="warm_positions"
     )
