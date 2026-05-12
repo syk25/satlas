@@ -114,17 +114,25 @@ async def recompute_visits(
     # dead entries that the overhead endpoint never returns. Name +
     # category + orbit_class are propagated into events so the passes
     # endpoint can render a row without a second lookup.
+    # Enum columns (category, orbit_class, object_type) come back as SQLAlchemy
+    # Enum instances. Normalise to plain strings at the boundary so downstream
+    # services (visit_frequency.compute_24h_passes → store_passes → json.dumps)
+    # don't have to know about the ORM type and never re-encounter the
+    # "Object of type SatelliteCategory is not JSON serializable" surprise.
+    def _val(x):
+        return x.value if x is not None and hasattr(x, "value") else x
+
     satellites = [
         {
             "norad_id": r[0],
             "name": r[1],
-            "category": r[2],
-            "orbit_class": r[3],
+            "category": _val(r[2]),
+            "orbit_class": _val(r[3]),
             "line1": r[10].strip(),
             "line2": r[11].strip(),
         }
         for r in rows
-        if r[8] in (None, "PAYLOAD")
+        if _val(r[8]) in (None, "PAYLOAD")
     ]
 
     t0 = time.time()

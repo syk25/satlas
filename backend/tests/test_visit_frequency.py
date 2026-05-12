@@ -1,6 +1,7 @@
 """Unit tests for visit_frequency — ADR-019 + pass timeline extension."""
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -10,6 +11,7 @@ from app.services.visit_frequency import (
     aggregate_pass_counts,
     compute_24h_passes,
     reset_strtree_cache,
+    store_passes,
 )
 
 
@@ -110,3 +112,77 @@ class TestCompute24hPasses:
         assert sample["name"] is None
         assert sample["category"] is None
         assert sample["orbit_class"] is None
+
+
+class TestStorePasses:
+    """Regression coverage for the prod failure where SQLAlchemy Enum objects
+    leaked into events and broke json.dumps in store_passes. The service
+    contract is plain strings — admin.py is responsible for normalising at
+    the boundary. These tests pin that contract."""
+
+    @pytest.mark.asyncio
+    async def test_serializes_string_metadata(self):
+        events = {
+            "KR": [
+                {
+                    "norad_id": 25544,
+                    "name": "ISS (ZARYA)",
+                    "category": "STATION",
+                    "orbit_class": "LEO",
+                    "entry_time": datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+                    "exit_time": datetime(2026, 5, 9, 12, 6, tzinfo=timezone.utc),
+                }
+            ]
+        }
+        with (
+            patch(
+                "app.services.visit_frequency.cache_set", new_callable=AsyncMock
+            ) as mset,
+            patch(
+                "app.services.visit_frequency.cache_hash_set",
+                new_callable=AsyncMock,
+            ),
+        ):
+            pairs, timelines = await store_passes(events)
+
+        assert pairs == 1 and timelines == 1
+        # Cache value is well-formed JSON with the expected string fields.
+        cached_value = mset.call_args.args[1]
+        import json
+
+        decoded = json.loads(cached_value)
+        assert decoded[0]["name"] == "ISS (ZARYA)"
+        assert decoded[0]["category"] == "STATION"
+        assert decoded[0]["entry_time"].endswith("Z")
+
+    @pytest.mark.asyncio
+    async def test_rejects_enum_metadata_loudly(self):
+        """If an admin.py refactor ever forgets to call .value, json.dumps
+        will raise TypeError. Pin that behaviour so the next prod-shaped
+        regression surfaces here instead of in a failing GHA cron run."""
+        import enum
+
+        class FakeCategory(enum.Enum):
+            STATION = "STATION"
+
+        events = {
+            "KR": [
+                {
+                    "norad_id": 25544,
+                    "name": "ISS",
+                    "category": FakeCategory.STATION,  # ← the bug shape
+                    "orbit_class": "LEO",
+                    "entry_time": datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+                    "exit_time": datetime(2026, 5, 9, 12, 6, tzinfo=timezone.utc),
+                }
+            ]
+        }
+        with (
+            patch("app.services.visit_frequency.cache_set", new_callable=AsyncMock),
+            patch(
+                "app.services.visit_frequency.cache_hash_set",
+                new_callable=AsyncMock,
+            ),
+        ):
+            with pytest.raises(TypeError, match="not JSON serializable"):
+                await store_passes(events)
