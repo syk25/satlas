@@ -80,3 +80,20 @@ async def cache_hash_mget(key: str, fields: list[str]) -> list[str | None]:
     except RedisError:
         logger.warning("Redis cache_hash_mget failed", extra={"key": key})
         return [None] * len(fields)
+
+
+async def cache_pipeline_hgetall(keys: list[str]) -> list[dict[str, str]]:
+    """Pipeline N HGETALL calls. Returns a list aligned with `keys`; missing
+    keys yield an empty dict. Used by /stats/dashboard to aggregate 24h pass
+    counts across all 234 territories in a single round-trip (~ms over
+    in-region Redis) instead of N serial HGETALL calls."""
+    if _redis is None or not keys:
+        return [{} for _ in keys]
+    try:
+        async with _redis.pipeline(transaction=False) as pipe:
+            for key in keys:
+                pipe.hgetall(key)
+            return await pipe.execute()
+    except RedisError:
+        logger.warning("Redis cache_pipeline_hgetall failed")
+        return [{} for _ in keys]

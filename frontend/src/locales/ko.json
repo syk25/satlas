@@ -79,7 +79,29 @@
   "nav": {
     "world": "전체",
     "northPole": "북극",
-    "southPole": "남극"
+    "southPole": "남극",
+    "map": "지도",
+    "dashboard": "대시보드"
+  },
+  "dashboard": {
+    "title": "Satlas 대시보드",
+    "tagline": "활성 위성, 영토 활동, 최근 발사를 한눈에 확인합니다.",
+    "empty": "아직 데이터가 없습니다 — 사전계산이 준비 중입니다.",
+    "cards": {
+      "totals": {
+        "title": "활성 위성",
+        "subtitle": "카테고리별 PAYLOAD 분포",
+        "unit": "활성 페이로드"
+      },
+      "topCountries": {
+        "title": "통과 빈도가 높은 영토",
+        "subtitle": "최근 24시간 누적 통과 횟수"
+      },
+      "recentLaunches": {
+        "title": "최근 발사",
+        "subtitle": "지난 30일"
+      }
+    }
   },
   "language": {
     "en": "EN",

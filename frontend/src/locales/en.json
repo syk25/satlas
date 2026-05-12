@@ -79,7 +79,29 @@
   "nav": {
     "world": "World",
     "northPole": "North Pole",
-    "southPole": "South Pole"
+    "southPole": "South Pole",
+    "map": "Map",
+    "dashboard": "Dashboard"
+  },
+  "dashboard": {
+    "title": "Satlas Dashboard",
+    "tagline": "Global overview of active satellites, territory activity, and recent launches.",
+    "empty": "No data yet — precompute is still warming up.",
+    "cards": {
+      "totals": {
+        "title": "Active satellites",
+        "subtitle": "PAYLOAD objects by category",
+        "unit": "active payloads tracked"
+      },
+      "topCountries": {
+        "title": "Most overflown territories",
+        "subtitle": "Total satellite passes, last 24h"
+      },
+      "recentLaunches": {
+        "title": "Recent launches",
+        "subtitle": "Past 30 days"
+      }
+    }
   },
   "language": {
     "en": "EN",

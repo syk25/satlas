@@ -60,3 +60,27 @@ export interface SatellitePass {
 }
 
 export type PanelTab = 'overhead' | 'schedule'
+
+export interface DashboardSatellites {
+  total: number
+  by_category: Partial<Record<SatelliteCategory, number>>
+}
+
+export interface DashboardTopCountry {
+  cc: string
+  passes_24h: number
+}
+
+export interface DashboardRecentLaunch {
+  norad_id: number
+  name: string
+  launch_date: string | null
+  operator: string | null
+  category: SatelliteCategory | null
+}
+
+export interface DashboardStats {
+  satellites: DashboardSatellites
+  top_countries: DashboardTopCountry[]
+  recent_launches: DashboardRecentLaunch[]
+}

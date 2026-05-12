@@ -70,6 +70,8 @@ Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE 
 - [x] Background prewarm pipeline (Celery worker + beat, single batched SGP4 sweep every 15 min, sub-2 s response across all 234 territories)
 - [x] `GET /satellites/passes/{country_code}` — 24-hour pass timeline per country
 - [x] Pass schedule UI (panel tab, 1 h / 6 h / 24 h grouping)
+- [x] `GET /stats/dashboard` — global stats (active satellites by category, top territories by 24h passes, recent launches)
+- [x] Dashboard page at `/dashboard` (React Router) with category, top-countries, and recent-launches cards
 
 ---
 
