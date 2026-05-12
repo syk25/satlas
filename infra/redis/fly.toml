@@ -1,0 +1,31 @@
+# Satlas self-hosted Redis (cache + Celery broker).
+# Lives in sjc next to satlas-api so reads/writes stay on Fly's internal
+# flycast network — single-stream cross-Pacific TCP was capping the previous
+# Upstash-in-Singapore setup at ~25KB/s for the big 1MB+ cache values.
+app = "satlas-redis"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # No public env. Password is injected via flyctl secrets at deploy.
+
+# No [http_service] — Redis speaks its own protocol on 6379 over the
+# private flycast network only; we never expose it to the public internet.
+[[services]]
+  internal_port = 6379
+  protocol = "tcp"
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 6379
+
+# Minimum-size VM. Workload is steady but light — Redis is single-threaded
+# and serves at internal-network speed, 256MB easily covers ~50MB working
+# set (positions, per-country overhead, passes, visits) with headroom.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
