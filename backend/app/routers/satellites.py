@@ -9,7 +9,7 @@ from app.models.satellite import SatelliteCategory
 from app.services import boundaries, cache
 from app.services.overhead_simulation import simulate_overhead_window
 from app.services.tle_ingest import POSITIONS_ALL_CACHE_KEY
-from app.services.visit_frequency import _visits_key
+from app.services.visit_frequency import _passes_key, _visits_key
 
 router = APIRouter(prefix="/satellites", tags=["satellites"])
 
@@ -27,6 +27,12 @@ class SatellitePosition(BaseModel):
     name: str
     lat: float
     lon: float
+
+
+class SatellitePass(BaseModel):
+    norad_id: int
+    entry_time: datetime
+    exit_time: datetime
 
 
 class SatelliteOverhead(BaseModel):
@@ -152,6 +158,28 @@ async def get_overhead(
     )
 
     return result
+
+
+@router.get("/passes/{country_code}", response_model=list[SatellitePass])
+async def get_passes(country_code: str) -> Response:
+    """24-hour pass timeline for a country, computed by the periodic
+    visits/recompute sweep and served straight from Redis.
+
+    Each entry is one entry→exit event. Passes are written by the same job
+    that fills `passes_24h` on the overhead endpoint, so the two views are
+    always in sync. Returns an empty array if the sweep hasn't populated
+    this country yet.
+    """
+    cc = country_code.upper()
+
+    if not boundaries.country_exists(cc):
+        raise HTTPException(status_code=404, detail=f"Country '{cc}' not found.")
+
+    cached = await cache.cache_get(_passes_key(cc))
+    if cached is not None:
+        return Response(content=cached, media_type="application/json")
+
+    return Response(content="[]", media_type="application/json")
 
 
 @router.get("/positions", response_model=list[SatellitePosition])

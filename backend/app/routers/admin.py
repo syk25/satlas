@@ -15,7 +15,7 @@ from app.services.tle_ingest import (
     parse_satcat_csv,
     set_satcat_cache,
 )
-from app.services.visit_frequency import compute_24h_visits, store_visits
+from app.services.visit_frequency import compute_24h_passes, store_passes
 
 logger = logging.getLogger(__name__)
 
@@ -113,15 +113,17 @@ async def recompute_visits(
     ]
 
     t0 = time.time()
-    visits = await asyncio.to_thread(compute_24h_visits, satellites)
+    passes = await asyncio.to_thread(compute_24h_passes, satellites)
     elapsed = time.time() - t0
-    pairs = await store_visits(visits)
+    pairs, timelines = await store_passes(passes)
 
     logger.info(
-        "visits/recompute: %d satellites, %d countries, %d pairs in %.1fs",
+        "visits/recompute: %d satellites, %d countries, %d pairs, "
+        "%d timelines in %.1fs",
         len(satellites),
-        len(visits),
+        len(passes),
         pairs,
+        timelines,
         elapsed,
     )
     if elapsed > 600:
@@ -129,7 +131,8 @@ async def recompute_visits(
 
     return {
         "satellites": len(satellites),
-        "countries": len(visits),
+        "countries": len(passes),
         "pairs": pairs,
+        "timelines": timelines,
         "elapsed_seconds": round(elapsed, 1),
     }
