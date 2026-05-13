@@ -34,6 +34,8 @@ Satlas takes a third perspective — **country-based**:
 
 Before Satlas, answering this required walking through each satellite's orbit manually or fitting coordinate-based tools to a national boundary. Satlas reduces it to a single country click.
 
+The seed came from an aircraft surveillance display I worked with in the Air Force, which shows aircraft activity around a country in real time. The framing — *what's flying over our airspace right now* — stuck with me. Years later, on a night walk, I noticed bright dots moving overhead. Most of them turned out to be satellites. Searching online, I found 3D globes that placed satellites in orbit and 2D tools that traced individual orbits, but nothing that answered the same question in satellite terms: *which satellites are over this country right now*. With launches accelerating, the gap felt worth filling.
+
 ---
 
 ## Features

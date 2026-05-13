@@ -42,6 +42,7 @@ export default function AboutPage() {
       <section className="about-section">
         <h2 className="about-section-title">{t('about.why.title')}</h2>
         <p>{t('about.why.body')}</p>
+        <p className="about-paragraph-next">{t('about.why.story')}</p>
       </section>
 
       <section className="about-section">
