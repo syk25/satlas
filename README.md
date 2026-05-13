@@ -55,12 +55,12 @@ Before Satlas, answering this required walking through each satellite's orbit ma
 </p>
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/a367eafa-4f1c-4859-a2e6-290439e61c8b" alt="Global dashboard" width="800" /><br>
+  <img src="https://github.com/user-attachments/assets/35eb2f74-239d-4e34-9a8c-5b1c3c401165" alt="Global dashboard" width="800" /><br>
   <em>Dashboard — active catalog totals, category breakdown, most-overflown countries today, recent launches.</em>
 </p>
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/35eb2f74-239d-4e34-9a8c-5b1c3c401165" alt="Tracking a single satellite" width="800" /><br>
+  <img src="https://github.com/user-attachments/assets/a367eafa-4f1c-4859-a2e6-290439e61c8b" alt="Tracking a single satellite" width="800" /><br>
   <em>Track a satellite — real-time position, footprint, and 95-minute ground track.</em>
 </p>
 
