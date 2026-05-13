@@ -212,9 +212,6 @@ RPUSH and a single LRANGE read on the hot path.
 
 ## Notes
 
-- The first deployment of this change is `commit-pending`. Production
-  measurement is added below once the next GHA cycle exercises the
-  new path.
 - The single-batch `compute_24h_passes` and `store_passes` are
   retained for unit tests and any small-input internal caller. They
   are *not* called by `recompute_visits` anymore.
@@ -226,3 +223,25 @@ RPUSH and a single LRANGE read on the hot path.
   but breaks at 16,000". The next time we add a long-running compute,
   designing it streaming from the start is cheaper than refactoring
   later.
+
+### Production measurement (2026-05-13, post-deploy)
+
+Triggered a manual `/admin/visits/recompute` from the API machine
+after the chunked code shipped. Sampled `VmHWM` (high-water mark for
+resident RSS) on the uvicorn process while the sweep was running:
+
+| | Before (`anon-rss` at OOM) | After (`VmHWM` mid-sweep) |
+|---|---:|---:|
+| uvicorn RSS peak | ~860 MB (OOM-killed at 1024 cap) | ~340 MB |
+
+That is ~520 MB headroom recovered — enough to absorb 2–3× catalog
+growth (Starlink expansion etc.) before the chunk size needs another
+look. Endpoint-level verification: `/satellites/passes/{cc}` returned
+realistic event counts for representative countries (US ≈ 16k,
+RU ≈ 32k, CN ≈ 16k, KR ≈ 640) and `/stats/dashboard` top-countries
+came back populated with sensible totals.
+
+The OOM-related Sentry transaction memory contribution was not
+re-measured directly — it is implicit in the lower RSS, given the
+explicit `transaction.finish()` at the handler entry. If a future
+recompute regresses, that is the first place to check.
