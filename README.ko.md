@@ -4,7 +4,7 @@
 
 **지금 우리나라 위로 어떤 위성이 지나가고 있을까 — 실시간으로 확인하세요.**
 
-🛰️ 사이트: **[satlas.space](https://satlas.space)**  ·  한국에서 접속하면 자동으로 한국어 UI로 표시됩니다.
+🛰️ 사이트: **[satlas.space](https://satlas.space)**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Live](https://img.shields.io/badge/live-satlas.space-7e14ff.svg)](https://satlas.space)
@@ -43,7 +43,7 @@ Satlas는 세 번째 관점을 다룹니다 — **국가 기준**:
 - 📅 **앞으로 24시간 통과 일정** — 1시간 / 6시간 / 24시간 구간별 그룹
 - 🛰️ **위성 추적** — 실시간 풋프린트와 95분 지상 궤적을 지도 위에 표시
 - 📊 **전체 대시보드** — 활성 위성 총수, 카테고리별 분포, 오늘 가장 자주 통과한 국가, 최근 발사
-- 🇰🇷 **한국 접속 시 한국어 자동 노출** (Vercel Edge geo detection, ADR-025 참조)
+- 🌐 **다국어 UI** — 현재 영어와 한국어, IP 기반 언어 자동 선택 (ADR-025). 기여를 통해 다른 언어로 확장 가능한 구조.
 
 ---
 
