@@ -73,7 +73,7 @@ Satlas는 세 번째 관점을 다룹니다 — **국가 기준**:
 |---|---|
 | 백엔드 | Python 3.11 · FastAPI · PostgreSQL · Redis · Celery · APScheduler · SGP4 |
 | 프론트엔드 | React · Vite · TypeScript · Leaflet · satellite.js |
-| 인프라 | Docker Compose · Fly.io · Vercel · Vercel Edge Middleware · GitHub Actions |
+| 인프라 | Docker Compose · Fly.io · Vercel · GitHub Actions |
 | 데이터 | CelesTrak (TLE + SATCAT) · Natural Earth (국가 경계 폴리곤) |
 
 ---

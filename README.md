@@ -73,7 +73,7 @@ This project was inspired by an aircraft surveillance display I came across duri
 |---|---|
 | Backend | Python 3.11 · FastAPI · PostgreSQL · Redis · Celery · APScheduler · SGP4 |
 | Frontend | React · Vite · TypeScript · Leaflet · satellite.js |
-| Infra | Docker Compose · Fly.io · Vercel · Vercel Edge Middleware · GitHub Actions |
+| Infra | Docker Compose · Fly.io · Vercel · GitHub Actions |
 | Data | CelesTrak (TLE + SATCAT) · Natural Earth (country polygons) |
 
 ---
