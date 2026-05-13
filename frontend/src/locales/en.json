@@ -1,10 +1,10 @@
 {
   "app": {
     "title": "Satlas",
-    "tagline": "Satellite pass tracking by national territory"
+    "tagline": "Satellite pass tracking by country"
   },
   "panel": {
-    "placeholder": "Select a territory to see overhead satellites",
+    "placeholder": "Select a country to see overhead satellites",
     "loading": "Loading...",
     "error": "Failed to load satellite data",
     "noSatellites": "No satellites currently overhead",
@@ -64,7 +64,7 @@
     "longitude": "Longitude",
     "altitude": "Altitude",
     "speed": "Speed",
-    "territory": "Territory",
+    "territory": "Country",
     "openSea": "International waters",
     "offMap": {
       "north": "Satellite is over the North Pole — beyond the map's display range (>85°N).",
@@ -72,7 +72,7 @@
     }
   },
   "dropdown": {
-    "placeholder": "Select territory",
+    "placeholder": "Select country",
     "search": "Search...",
     "noResults": "No results"
   },
@@ -88,17 +88,17 @@
     "title": "What is Satlas?",
     "intro": "Curious what satellites are passing over your country right now? This site answers that at a glance.",
     "why": {
-      "title": "Why I built it",
-      "body": "Most satellite trackers focus on what you can see from your own location. Few show what's flying over an entire country, so I built one."
+      "title": "Why it exists",
+      "body": "Most satellite trackers focus on what an observer can see from their own location. Few show what is flying over an entire country, so Satlas was built to fill that gap."
     },
     "how": {
       "title": "How it works",
-      "body": "Each satellite's current position is computed from public orbital data (TLEs) using a standard propagation formula (SGP4). We then check which country that coordinate falls over.",
-      "refresh": "We automatically pull fresh catalog and orbit data twice a day and restart calculations from those measurements. Satellites drift slightly over time due to atmospheric drag and small gravitational variations, so the longer the same computation runs forward, the more its result diverges from reality. Thanks to this refresh cycle, the residual position error stays very small within this site's 24-hour window."
+      "body": "Each satellite's current position is computed from public orbital data (TLEs) using a standard propagation formula (SGP4). The resulting coordinate is then checked against country polygons to determine which country it falls over.",
+      "refresh": "Catalog and orbit data are automatically pulled twice a day, and calculations restart from those fresh measurements. Satellites drift slightly over time due to atmospheric drag and small gravitational variations, so the longer the same computation runs forward, the more its result diverges from reality. Thanks to this refresh cycle, the residual position error stays very small within this site's 24-hour window."
     },
     "limits": {
       "title": "Limits",
-      "body": "Satellite categories follow our data source (CelesTrak) as-is. Classified satellites — for example reconnaissance — whose orbits are not public are not included. Country borders come from a public map dataset (Natural Earth) at a coarse resolution, so very small islands may be missing."
+      "body": "Satellite categories follow the data source (CelesTrak) as-is. Classified satellites — for example reconnaissance — whose orbits are not public are not included. Country borders come from a public map dataset (Natural Earth) at a coarse resolution, so very small islands may be missing."
     },
     "source": {
       "title": "Sources",
@@ -106,16 +106,16 @@
       "code": "Code",
       "tle": "Orbital data",
       "catalog": "Satellite catalog",
-      "boundaries": "Territory boundaries"
+      "boundaries": "Country borders"
     },
     "privacy": {
       "title": "Privacy",
-      "body": "We use Vercel Analytics for visitor statistics: cookieless, aggregate page views only. No personally identifiable information is collected."
+      "body": "Visitor statistics are handled by Vercel Analytics: cookieless, aggregate page views only. No personally identifiable information is collected."
     }
   },
   "dashboard": {
     "title": "Satlas Dashboard",
-    "tagline": "Global overview of active satellites, territory activity, and recent launches.",
+    "tagline": "Global overview of active satellites, country activity, and recent launches.",
     "empty": "No data yet — precompute is still warming up.",
     "cards": {
       "totals": {
@@ -128,7 +128,7 @@
         "subtitle": "Distribution across CelesTrak feeds"
       },
       "topCountries": {
-        "title": "Most overflown territories",
+        "title": "Most overflown countries",
         "subtitle": "Total satellite passes, last 24h"
       },
       "recentLaunches": {

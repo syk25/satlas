@@ -1,6 +1,14 @@
 # Satlas
 
-An open-source platform that provides satellite pass and dwell information by country and territory.
+> 🌐 **English** · [한국어](README.ko.md)
+
+**See which satellites are flying over each country, in real time.**
+
+🛰️ Live: **[satlas.space](https://satlas.space)**  ·  Visiting from Korea? The UI auto-switches to Korean.
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Live](https://img.shields.io/badge/live-satlas.space-7e14ff.svg)](https://satlas.space)
+[![ADRs](https://img.shields.io/badge/architecture%20decisions-25-green.svg)](docs/adr/README.md)
 
 ---
 
@@ -13,21 +21,21 @@ Existing satellite tracking tools answer one of two questions:
 | Observer-based | Heavens-Above, Stellarium | "Can I see this satellite from my location?" |
 | Ownership-based | UCS Satellite Database | "Which country built this satellite?" |
 
-Satlas takes a third perspective — territorial:
-"Which satellites pass over this country, and for how long?"
+Satlas takes a third perspective — **country-based**:
+*"Which satellites pass over this country, and when?"*
 
-Previously, answering this question required checking each satellite's orbit individually or manually fitting coordinate-based tools to a national boundary. Satlas reduces this to a single country selection.
+Before Satlas, answering this required walking through each satellite's orbit manually or fitting coordinate-based tools to a national boundary. Satlas reduces it to a single country click.
 
 ---
 
 ## Features
 
-- Select a country on an interactive 2D world map
-- View satellites currently passing over the selected country in real time
-- Quantify dwell time per satellite
-- Visualize theoretical observation footprint (nadir / horizon)
-- Track pass count and next expected pass time
-- Analyze the breakdown of satellites by operating country
+- 🗺️ **Click any country** on a 2D world map → every satellite currently overhead
+- 🏷️ **Filter by category** — Starlink, GPS, weather, science, military, ...
+- 📅 **Upcoming passes for the next 24 hours**, grouped by 1 h / 6 h / 24 h windows
+- 🛰️ **Track a satellite** — its real-time footprint and 95-minute ground track on the map
+- 📊 **Global dashboard** — active catalog totals, category breakdown, most-overflown countries today, recent launches
+- 🇰🇷 **Auto Korean UI** for visitors from Korea (Vercel Edge geo detection, see ADR-025)
 
 ---
 
@@ -37,8 +45,22 @@ Previously, answering this question required checking each satellite's orbit ind
 |---|---|
 | Backend | Python 3.11 · FastAPI · PostgreSQL · Redis · Celery · APScheduler · SGP4 |
 | Frontend | React · Vite · TypeScript · Leaflet · satellite.js |
-| Infra | Docker Compose · Fly.io · Vercel · Cloudflare · GitHub Actions |
-| Data | CelesTrak (TLE) · Natural Earth (GeoJSON) |
+| Infra | Docker Compose · Fly.io · Vercel · Vercel Edge Middleware · GitHub Actions |
+| Data | CelesTrak (TLE + SATCAT) · Natural Earth (country polygons) |
+
+---
+
+## Architecture Decisions
+
+Every significant architectural choice is recorded as an ADR — what was decided, what alternatives were rejected, and what trade-offs were paid. Full index: **[docs/adr/](docs/adr/README.md)** (25 ADRs).
+
+Selected highlights:
+
+- **[ADR-005](docs/adr/ADR-005-data-storage-strategy.md)** — TLE storage strategy: twice-daily snapshots + phased pre-computation
+- **[ADR-014](docs/adr/ADR-014-deployment-platform.md)** — Deployment platform: Fly.io (backend) + Vercel (frontend)
+- **[ADR-018](docs/adr/ADR-018-overhead-membership-refresh.md)** — Overhead refresh: server-side window prediction + client-side gating
+- **[ADR-024](docs/adr/ADR-024-chunked-visits-recompute.md)** — Chunked recompute + Redis list schema (fixes the OOM cliff past 15k satellites)
+- **[ADR-025](docs/adr/ADR-025-ip-geo-i18n-and-dynamic-og.md)** — IP-geo language pick + per-locale OG image variants
 
 ---
 
@@ -46,50 +68,30 @@ Previously, answering this question required checking each satellite's orbit ind
 
 | Source | Purpose | License |
 |---|---|---|
-| [CelesTrak](https://celestrak.org) | TLE orbital elements + object metadata (operator country, launch date) for active satellites; fetched twice daily as GP JSON | Free public service, no API key required |
-| [Natural Earth](https://www.naturalearthdata.com) | Country boundary polygons for satellite-over-territory intersection | Public Domain |
+| [CelesTrak](https://celestrak.org) | TLE orbital elements + SATCAT metadata (operator country, launch date, object type). Fetched twice daily as GP JSON | Free public service, no API key |
+| [Natural Earth](https://www.naturalearthdata.com) | Country boundary polygons for satellite-over-country intersection | Public Domain |
 
-Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE source and may be integrated in a future phase. Registration is free but required.
+Space-Track.org (US Space Force) is being evaluated as a supplementary historical TLE source and may be added in a future phase. Registration is free but required.
 
 ---
 
-## Roadmap
+## Recent Milestones
 
-- [x] Project design and architecture documentation (ADR-001 – ADR-011)
-- [x] Backend scaffold (FastAPI · PostgreSQL · Redis · Docker Compose)
-- [x] Database schema (SQLAlchemy ORM + Alembic migrations)
-- [x] CI/CD pipeline (GitHub Actions, path-based triggers)
-- [x] TLE ingestion pipeline (CelesTrak on-demand)
-- [x] SGP4-based position calculation and country boundary intersection
-- [x] `GET /satellites/overhead/{country_code}` — overhead satellites by country
-- [x] `GET /satellites/positions` — all satellite positions (global map view)
-- [x] Redis caching (positions cache 60 s warm cycle, per-country overhead cache 20 min TTL, graceful degradation)
-- [x] Scheduled TLE ingestion (GitHub Actions push model, twice daily at 00:00 / 12:00 UTC — ADR-015)
-- [x] Frontend MVP (Leaflet 2D map · country click · satellite markers · i18n en/ko)
-- [x] Deployment (Fly.io + Vercel)
-- [x] Background prewarm pipeline (Celery worker + beat, single batched SGP4 sweep every 15 min, sub-2 s response across all 234 territories)
-- [x] `GET /satellites/passes/{country_code}` — 24-hour pass timeline per country
-- [x] Pass schedule UI (panel tab, 1 h / 6 h / 24 h grouping)
-- [x] `GET /stats/dashboard` — global stats (active satellites by category, top territories by 24h passes, recent launches)
-- [x] Dashboard page at `/dashboard` (React Router) with category, top-countries, and recent-launches cards
-- [x] Chunked visits/recompute + Redis list schema (ADR-024) — fixes the OOM cliff when the catalog grows past ~15k satellites
-- [x] Launch polish: `/about` page, social-share OG metadata, IP-geo language pick (KR → ko), per-locale OG image variants via Edge middleware (ADR-025)
+- 🌐 **Custom domain** (satlas.space) + locale-aware OG image previews + first-visit IP-geo language pick — ADR-025
+- 🔍 **SEO baseline** — robots.txt, sitemap.xml, JSON-LD WebApplication schema, Google Search Console
+- 📋 **`/about` page** — friendly intro, sources, limits, privacy
+- 📊 **Dashboard** — global catalog, category bars, top-overflown countries, recent launches
+- 📅 **24-hour pass schedule** — 1 h / 6 h / 24 h grouping, panel tab toggle
+- 💧 **Chunked recompute + Redis list schema** — bounds memory regardless of catalog size — ADR-024
+- 🚀 **Public launch** — Fly.io + Vercel + GitHub Actions push model
 
 ---
 
 ## Target Users
 
-- Space and satellite researchers, students
-- Defense and security professionals
-- Researchers who need to analyze satellite pass patterns over specific territories
-
----
-
-## Boundary Data & Disclaimer
-
-Country boundaries are sourced from [Natural Earth](https://www.naturalearthdata.com/). Some territories have disputed borders or contested sovereignty. Satlas does not take a political position on any territorial dispute. Boundary representations follow Natural Earth conventions and may not reflect all competing claims.
-
-Satellite data is available for all regions, including disputed territories. Users are responsible for interpreting data in accordance with applicable laws and their own assessment of territorial status.
+- Space and satellite enthusiasts curious about what's overhead right now
+- Students learning orbital mechanics, satellite operations, or space situational awareness
+- Researchers analysing satellite pass patterns over specific countries
 
 ---
 
