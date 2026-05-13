@@ -73,6 +73,7 @@ Space-Track.org (US Space Force) is evaluated as a supplementary historical TLE 
 - [x] `GET /stats/dashboard` — global stats (active satellites by category, top territories by 24h passes, recent launches)
 - [x] Dashboard page at `/dashboard` (React Router) with category, top-countries, and recent-launches cards
 - [x] Chunked visits/recompute + Redis list schema (ADR-024) — fixes the OOM cliff when the catalog grows past ~15k satellites
+- [x] Launch polish: `/about` page, social-share OG metadata, IP-geo language pick (KR → ko), per-locale OG image variants via Edge middleware (ADR-025)
 
 ---
 
