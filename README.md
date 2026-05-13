@@ -43,7 +43,6 @@ Before Satlas, answering this required walking through each satellite's orbit ma
 - 📅 **Upcoming passes for the next 24 hours**, grouped by 1 h / 6 h / 24 h windows
 - 🛰️ **Track a satellite** — its real-time footprint and 95-minute ground track on the map
 - 📊 **Global dashboard** — active catalog totals, category breakdown, most-overflown countries today, recent launches
-- 🌐 **Multilingual UI** — English and Korean today, with IP-based language auto-selection (ADR-025). Designed to extend to additional languages via contribution.
 
 ---
 
