@@ -109,6 +109,11 @@
       "catalog": "Satellite catalog",
       "boundaries": "Country borders"
     },
+    "feedback": {
+      "title": "Contact",
+      "body": "Feedback, ideas, or just a quick hello — anything is welcome.",
+      "cta": "Contact Us"
+    },
     "privacy": {
       "title": "Privacy",
       "body": "Visitor statistics are handled by Vercel Analytics: cookieless, aggregate page views only. No personally identifiable information is collected."

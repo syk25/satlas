@@ -29,8 +29,15 @@ const SOURCE_LINKS: SourceLink[] = [
   },
 ]
 
+const FEEDBACK_URLS: Record<string, string> = {
+  en: 'https://forms.gle/Mfms2Bu1W9agNHKYA',
+  ko: 'https://forms.gle/p6t6MNGMVE9TrPtp6',
+}
+
 export default function AboutPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const lang = (i18n.resolvedLanguage ?? i18n.language).split('-')[0]
+  const feedbackUrl = FEEDBACK_URLS[lang] ?? FEEDBACK_URLS.en
 
   return (
     <div className="about">
@@ -69,6 +76,21 @@ export default function AboutPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="about-section">
+        <h2 className="about-section-title">{t('about.feedback.title')}</h2>
+        <p>{t('about.feedback.body')}</p>
+        <p className="about-paragraph-next">
+          <a
+            href={feedbackUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="about-feedback-link"
+          >
+            {t('about.feedback.cta')} ↗
+          </a>
+        </p>
       </section>
 
       <section className="about-section">

@@ -1077,6 +1077,16 @@ html, body, #root {
   text-decoration: underline;
 }
 
+.about-feedback-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.about-feedback-link:hover {
+  text-decoration: underline;
+}
+
 /* ── Panel drag handle (mobile only) ── */
 .panel-handle {
   display: none;
