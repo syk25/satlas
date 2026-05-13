@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import MapHint from '../components/MapHint'
 import { SatellitePanel } from '../components/SatellitePanel'
 import { WorldMap } from '../components/WorldMap'
 import { useOverheadSatellites } from '../hooks/useOverheadSatellites'
@@ -130,6 +131,7 @@ export default function MapPage() {
           trackedSatellite={trackedSatellite}
           activeCategory={activeCategory}
         />
+        <MapHint externalDismiss={selected !== null} />
       </div>
       <SatellitePanel
         countryName={selected?.name ?? null}
