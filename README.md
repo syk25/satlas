@@ -10,6 +10,14 @@
 [![Live](https://img.shields.io/badge/live-satlas.space-7e14ff.svg)](https://satlas.space)
 [![ADRs](https://img.shields.io/badge/architecture%20decisions-25-green.svg)](docs/adr/README.md)
 
+<p align="center">
+  <a href="https://youtu.be/NvoHzniUUM0">
+    <img src="https://img.youtube.com/vi/NvoHzniUUM0/maxresdefault.jpg" alt="Satlas demo — click to play on YouTube" width="640" />
+  </a>
+  <br>
+  <em>▶ Watch the demo on YouTube</em>
+</p>
+
 ---
 
 ## Why Satlas
