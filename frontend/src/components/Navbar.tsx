@@ -22,6 +22,12 @@ export function Navbar() {
         >
           {t('nav.dashboard')}
         </NavLink>
+        <NavLink
+          to="/about"
+          className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}
+        >
+          {t('nav.about')}
+        </NavLink>
       </div>
       <div className="navbar-spacer" />
       <button className="lang-toggle" onClick={toggleLang}>

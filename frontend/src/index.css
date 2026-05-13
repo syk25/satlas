@@ -986,6 +986,87 @@ html, body, #root {
   text-align: center;
 }
 
+/* ── About page ── */
+.about {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 24px 64px;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+  color: var(--text-primary);
+  line-height: 1.7;
+}
+
+.about-header {
+  margin-bottom: 32px;
+}
+
+.about-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin-bottom: 12px;
+}
+
+.about-intro {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.about-section {
+  margin-top: 28px;
+}
+
+.about-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.about-section p {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.about-paragraph-next {
+  margin-top: 12px;
+}
+
+.about-sources {
+  list-style: none;
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.about-sources li {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  align-items: baseline;
+}
+
+.about-source-label {
+  flex-shrink: 0;
+  width: 110px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.about-sources a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-sources a:hover {
+  text-decoration: underline;
+}
+
 /* ── Panel drag handle (mobile only) ── */
 .panel-handle {
   display: none;
@@ -1040,5 +1121,22 @@ html, body, #root {
 
   .panel-body {
     -webkit-overflow-scrolling: touch;
+  }
+
+  .about {
+    padding: 20px 16px 48px;
+  }
+
+  .about-title {
+    font-size: 22px;
+  }
+
+  .about-sources li {
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .about-source-label {
+    width: auto;
   }
 }
