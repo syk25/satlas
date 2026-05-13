@@ -90,8 +90,12 @@
     "cards": {
       "totals": {
         "title": "활성 위성",
-        "subtitle": "카테고리별 PAYLOAD 분포",
+        "subtitle": "카탈로그에 등록된 PAYLOAD",
         "unit": "활성 페이로드"
+      },
+      "category": {
+        "title": "카테고리별 분포",
+        "subtitle": "CelesTrak 피드 기준"
       },
       "topCountries": {
         "title": "통과 빈도가 높은 영토",

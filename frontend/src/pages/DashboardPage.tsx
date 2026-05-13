@@ -50,6 +50,21 @@ function StatCard({
 
 function SatelliteTotalsCard({ data }: { data: DashboardSatellites }) {
   const { t } = useTranslation()
+  return (
+    <StatCard
+      title={t('dashboard.cards.totals.title')}
+      subtitle={t('dashboard.cards.totals.subtitle')}
+    >
+      <div className="stat-totals-headline">
+        <span className="stat-totals-number">{data.total.toLocaleString()}</span>
+        <span className="stat-totals-unit">{t('dashboard.cards.totals.unit')}</span>
+      </div>
+    </StatCard>
+  )
+}
+
+function SatelliteCategoryCard({ data }: { data: DashboardSatellites }) {
+  const { t } = useTranslation()
   const max = useMemo(
     () => Math.max(1, ...Object.values(data.by_category)),
     [data.by_category]
@@ -62,13 +77,9 @@ function SatelliteTotalsCard({ data }: { data: DashboardSatellites }) {
 
   return (
     <StatCard
-      title={t('dashboard.cards.totals.title')}
-      subtitle={t('dashboard.cards.totals.subtitle')}
+      title={t('dashboard.cards.category.title')}
+      subtitle={t('dashboard.cards.category.subtitle')}
     >
-      <div className="stat-totals-headline">
-        <span className="stat-totals-number">{data.total.toLocaleString()}</span>
-        <span className="stat-totals-unit">{t('dashboard.cards.totals.unit')}</span>
-      </div>
       <div className="stat-bars">
         {sortedCats.map(([cat, count]) => (
           <div key={cat} className="stat-bar-row">
@@ -219,6 +230,7 @@ export default function DashboardPage() {
       </header>
       <div className="dashboard-grid">
         <SatelliteTotalsCard data={data.satellites} />
+        <SatelliteCategoryCard data={data.satellites} />
         <TopCountriesCard data={data.top_countries} names={names} />
         <RecentLaunchesCard data={data.recent_launches} />
       </div>

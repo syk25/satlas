@@ -90,8 +90,12 @@
     "cards": {
       "totals": {
         "title": "Active satellites",
-        "subtitle": "PAYLOAD objects by category",
+        "subtitle": "PAYLOAD objects in the catalog",
         "unit": "active payloads tracked"
+      },
+      "category": {
+        "title": "By category",
+        "subtitle": "Distribution across CelesTrak feeds"
       },
       "topCountries": {
         "title": "Most overflown territories",
