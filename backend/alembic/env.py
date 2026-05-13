@@ -2,8 +2,6 @@ import asyncio
 import logging
 from logging.config import fileConfig
 
-import asyncpg.exceptions
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 import app.models.satellite  # noqa: F401
@@ -11,6 +9,7 @@ import app.models.user  # noqa: F401
 from alembic import context
 from app.config import settings
 from app.models import Base
+from app.services.db_retry import run_with_db_retry
 
 config = context.config
 
@@ -21,21 +20,6 @@ target_metadata = Base.metadata
 
 logger = logging.getLogger("alembic.runtime.migration")
 
-# release_command machines on Fly are short-lived and have hit transient
-# `ConnectionDoesNotExistError: connection was closed in the middle of
-# operation` on the very first Postgres call multiple times. The DB itself
-# is fine on retry — wrap the migration entrypoint in bounded retries.
-_RETRY_LIMIT = 4
-_RETRY_BACKOFF_SECONDS = 2
-
-_TRANSIENT = (
-    asyncpg.exceptions.ConnectionDoesNotExistError,
-    asyncpg.exceptions.CannotConnectNowError,
-    ConnectionResetError,
-    ConnectionRefusedError,
-    OSError,
-)
-
 
 def do_run_migrations(connection):
     context.configure(connection=connection, target_metadata=target_metadata)
@@ -44,6 +28,8 @@ def do_run_migrations(connection):
 
 
 async def _attempt_migrations():
+    # Fresh engine per attempt — the retry helper depends on this so a
+    # broken connection from a prior attempt doesn't leak into the next one.
     url = settings.async_database_url
     connect_args = (
         {"ssl": False} if any(h in url for h in ("flycast", ".internal")) else {}
@@ -56,32 +42,12 @@ async def _attempt_migrations():
         await engine.dispose()
 
 
-def _is_transient(exc: BaseException) -> bool:
-    cause = exc
-    while cause is not None:
-        if isinstance(cause, _TRANSIENT):
-            return True
-        cause = cause.__cause__
-    return False
-
-
 async def run_async_migrations():
-    for attempt in range(1, _RETRY_LIMIT + 1):
-        try:
-            await _attempt_migrations()
-            return
-        except (DBAPIError, OSError) as exc:
-            if not _is_transient(exc) or attempt == _RETRY_LIMIT:
-                raise
-            wait = _RETRY_BACKOFF_SECONDS * attempt
-            logger.warning(
-                "Transient DB error on migration attempt %d/%d (%s). Retrying in %ds.",
-                attempt,
-                _RETRY_LIMIT,
-                exc.__class__.__name__,
-                wait,
-            )
-            await asyncio.sleep(wait)
+    # ADR-019 retry pattern — release_command machines occasionally hit
+    # `ConnectionDoesNotExistError` on their first Postgres call. The
+    # helper is shared with admin.push_tle_feed (same flake shape under
+    # the GHA TLE-refresh cron).
+    await run_with_db_retry(_attempt_migrations, label="alembic migration")
 
 
 def run_migrations_online():

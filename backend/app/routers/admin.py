@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.services import boundaries
+from app.services.db_retry import run_with_db_retry
 from app.services.tle_ingest import (
     get_satcat_size,
     ingest_feed,
@@ -50,11 +51,7 @@ def _verify_token(request: Request) -> None:
 
 
 @router.post("/tle/ingest/{group}")
-async def push_tle_feed(
-    group: str,
-    request: Request,
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> dict:
+async def push_tle_feed(group: str, request: Request) -> dict:
     """Receive CelesTrak GP JSON (OMM mean elements) from GitHub Actions.
 
     GitHub Actions runners use non-datacenter IPs not blocked by CelesTrak,
@@ -62,6 +59,12 @@ async def push_tle_feed(
     the OMM elements; SATCAT-sourced metadata (operator country, launch date,
     object type, RCS size) is applied per NORAD ID from the in-memory SATCAT
     cache populated by /admin/satcat/ingest.
+
+    The Fly Postgres cluster occasionally drops connections mid-statement
+    (`asyncpg.ConnectionDoesNotExistError`); the largest feed (`active`,
+    16k satellites) is the one that statistically gets caught. We retry
+    on transient drops with a fresh session per attempt — the alembic
+    release_command uses the same helper (ADR-019).
     """
     _verify_token(request)
     raw = (await request.body()).decode("utf-8", errors="replace")
@@ -69,8 +72,15 @@ async def push_tle_feed(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Empty body"
         )
+
+    async def _attempt() -> int:
+        # Fresh session per attempt — same-session retry after a broken
+        # connection just hits the same dead pool slot.
+        async with AsyncSessionLocal() as db:
+            return await ingest_feed(db, group, raw)
+
     try:
-        count = await ingest_feed(db, group, raw)
+        count = await run_with_db_retry(_attempt, label=f"tle/ingest/{group}")
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
