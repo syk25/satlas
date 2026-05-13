@@ -61,6 +61,16 @@ html, body, #root {
   color: var(--text-primary);
   text-transform: uppercase;
   flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.navbar-brand:hover {
+  opacity: 0.7;
 }
 
 .navbar-views {

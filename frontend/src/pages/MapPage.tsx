@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { SatellitePanel } from '../components/SatellitePanel'
 import { WorldMap } from '../components/WorldMap'
 import { useOverheadSatellites } from '../hooks/useOverheadSatellites'
@@ -21,6 +22,25 @@ export default function MapPage() {
   const [satOffMapDir, setSatOffMapDir] = useState<'north' | 'south' | null>(null)
   const [includeInactive, setIncludeInactive] = useState(false)
   const [panelTab, setPanelTab] = useState<PanelTab>('overhead')
+
+  // Reset selection state when the Navbar brand is clicked. The navigator
+  // pushes a fresh `reset` token into location.state each click, so a
+  // re-click on the same `/` route still fires this effect even though the
+  // path didn't change. Map zoom/pan is intentionally preserved — only
+  // selection-related state goes back to its initial value.
+  const location = useLocation()
+  const resetToken = (location.state as { reset?: number } | null)?.reset
+  useEffect(() => {
+    if (resetToken === undefined) return
+    setSelected(null)
+    setTrackedSatellite(null)
+    setPreTrackSelected(null)
+    setSelectedSat(null)
+    setActiveCategory(null)
+    setSatOffMapDir(null)
+    setIncludeInactive(false)
+    setPanelTab('overhead')
+  }, [resetToken])
 
   const { data, loading, error } = useOverheadSatellites(
     selected?.code ?? null,
