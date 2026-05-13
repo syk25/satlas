@@ -47,6 +47,25 @@ Satlas는 세 번째 관점을 다룹니다 — **국가 기준**:
 
 ---
 
+## 스크린샷
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/3b79930d-ff64-42f8-b4c4-f1b883ffad21" alt="국가 선택 시 상공 위성 표시" width="800" /><br>
+  <em>국가를 클릭하면 그 나라 위를 지금 지나가는 위성 전체와 24시간 통과 일정이 표시됩니다.</em>
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/a367eafa-4f1c-4859-a2e6-290439e61c8b" alt="전체 대시보드" width="800" /><br>
+  <em>대시보드 — 활성 카탈로그, 카테고리 분포, 오늘 가장 자주 통과한 국가, 최근 발사.</em>
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/35eb2f74-239d-4e34-9a8c-5b1c3c401165" alt="위성 추적 모드" width="800" /><br>
+  <em>위성 추적 — 실시간 위치, 풋프린트, 95분 지상 궤적.</em>
+</p>
+
+---
+
 ## 기술 스택
 
 | 계층 | 사용 기술 |
