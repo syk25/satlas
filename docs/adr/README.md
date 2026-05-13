@@ -33,6 +33,7 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-021](ADR-021-celery-worker-for-prewarm.md) | Celery Worker for Overhead Prewarm | Accepted |
 | [ADR-022](ADR-022-prewarm-sgp4-dedup.md) | Hoist SGP4 Propagation Out of Per-Country Prewarm | Accepted |
 | [ADR-023](ADR-023-redis-self-host-sjc.md) | Self-Hosted Redis in sjc (replaces cross-Pacific Upstash) | Accepted |
+| [ADR-024](ADR-024-chunked-visits-recompute.md) | Chunked visits/recompute + Redis list storage | Accepted |
 
 ---
 

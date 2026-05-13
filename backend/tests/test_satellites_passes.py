@@ -1,8 +1,9 @@
 """Integration tests for /satellites/passes/{cc}.
 
 The endpoint is a thin read-through over Redis populated by the periodic
-visits/recompute sweep — no SGP4 or DB on the request path. Tests mock the
-cache layer only, matching the pattern in test_satellites_overhead.
+visits/recompute sweep — no SGP4 or DB on the request path. ADR-024 moved
+the storage from a single JSON blob (cache_get) to a list of JSON-encoded
+events (cache_list_range), so the tests mock the new list-range helper.
 """
 
 import json
@@ -37,23 +38,33 @@ def client():
         app.router.lifespan_context = original
 
 
-def test_returns_cached_passes_verbatim(client):
-    cached = json.dumps(
-        [
+def test_returns_passes_verbatim_from_list(client):
+    """Each list element is already a JSON-encoded event; the endpoint
+    concatenates them into a JSON array without re-parsing."""
+    elements = [
+        json.dumps(
             {
                 "norad_id": 25544,
+                "name": "ISS (ZARYA)",
+                "category": "STATION",
+                "orbit_class": "LEO",
                 "entry_time": "2026-05-09T12:00:00Z",
                 "exit_time": "2026-05-09T12:05:00Z",
-            },
+            }
+        ),
+        json.dumps(
             {
                 "norad_id": 25544,
+                "name": "ISS (ZARYA)",
+                "category": "STATION",
+                "orbit_class": "LEO",
                 "entry_time": "2026-05-09T13:32:00Z",
                 "exit_time": "2026-05-09T13:38:00Z",
-            },
-        ]
-    )
-    with patch("app.services.cache.cache_get", new_callable=AsyncMock) as mget:
-        mget.return_value = cached
+            }
+        ),
+    ]
+    with patch("app.services.cache.cache_list_range", new_callable=AsyncMock) as mrange:
+        mrange.return_value = elements
         resp = client.get("/satellites/passes/KR")
 
     assert resp.status_code == 200
@@ -61,11 +72,12 @@ def test_returns_cached_passes_verbatim(client):
     assert len(body) == 2
     assert body[0]["norad_id"] == 25544
     assert body[0]["entry_time"] < body[0]["exit_time"]
+    assert body[1]["name"] == "ISS (ZARYA)"
 
 
-def test_empty_array_when_cache_unset(client):
-    with patch("app.services.cache.cache_get", new_callable=AsyncMock) as mget:
-        mget.return_value = None
+def test_empty_array_when_list_empty(client):
+    with patch("app.services.cache.cache_list_range", new_callable=AsyncMock) as mrange:
+        mrange.return_value = []
         resp = client.get("/satellites/passes/KR")
 
     assert resp.status_code == 200
@@ -81,11 +93,11 @@ def test_country_code_normalized_to_uppercase(client):
     # `kr` should resolve to KR — boundary lookup and cache key both lower→upper.
     seen_keys: list[str] = []
 
-    async def fake_get(key):
+    async def fake_range(key, start=0, end=-1):
         seen_keys.append(key)
-        return None
+        return []
 
-    with patch("app.services.cache.cache_get", side_effect=fake_get):
+    with patch("app.services.cache.cache_list_range", side_effect=fake_range):
         resp = client.get("/satellites/passes/kr")
 
     assert resp.status_code == 200

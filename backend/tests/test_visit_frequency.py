@@ -9,9 +9,11 @@ from app.services.boundaries import load_country_polygons
 from app.services.visit_frequency import (
     _get_strtree,
     aggregate_pass_counts,
+    begin_recompute,
     compute_24h_passes,
     reset_strtree_cache,
     store_passes,
+    store_passes_chunk,
 )
 
 
@@ -154,6 +156,82 @@ class TestStorePasses:
         assert decoded[0]["name"] == "ISS (ZARYA)"
         assert decoded[0]["category"] == "STATION"
         assert decoded[0]["entry_time"].endswith("Z")
+
+    @pytest.mark.asyncio
+    async def test_chunk_path_appends_via_chunk_apply(self):
+        """ADR-024 path. store_passes_chunk pushes one pipeline that contains
+        HINCRBY for visits + RPUSH for passes + EXPIRE on every touched key."""
+        events = {
+            "KR": [
+                {
+                    "norad_id": 25544,
+                    "name": "ISS",
+                    "category": "STATION",
+                    "orbit_class": "LEO",
+                    "entry_time": datetime(2026, 5, 9, 12, 0, tzinfo=timezone.utc),
+                    "exit_time": datetime(2026, 5, 9, 12, 6, tzinfo=timezone.utc),
+                },
+                {
+                    "norad_id": 25544,
+                    "name": "ISS",
+                    "category": "STATION",
+                    "orbit_class": "LEO",
+                    "entry_time": datetime(2026, 5, 9, 13, 32, tzinfo=timezone.utc),
+                    "exit_time": datetime(2026, 5, 9, 13, 38, tzinfo=timezone.utc),
+                },
+            ],
+            "JP": [
+                {
+                    "norad_id": 25544,
+                    "name": "ISS",
+                    "category": "STATION",
+                    "orbit_class": "LEO",
+                    "entry_time": datetime(2026, 5, 9, 12, 6, tzinfo=timezone.utc),
+                    "exit_time": datetime(2026, 5, 9, 12, 9, tzinfo=timezone.utc),
+                }
+            ],
+        }
+        with patch(
+            "app.services.visit_frequency.cache_chunk_apply",
+            new_callable=AsyncMock,
+        ) as mapply:
+            pairs, events_total = await store_passes_chunk(events)
+
+        assert events_total == 3
+        # KR has 1 norad pair (with 2 events), JP has 1 norad pair.
+        assert pairs == 2
+
+        # One pipeline call carrying both halves.
+        assert mapply.await_count == 1
+        v_updates, p_appends, *_ = mapply.call_args.args
+        assert v_updates["satlas:visits:24h:KR"]["25544"] == 2
+        assert v_updates["satlas:visits:24h:JP"]["25544"] == 1
+        assert len(p_appends["satlas:passes:24h:KR"]) == 2
+        assert len(p_appends["satlas:passes:24h:JP"]) == 1
+
+        import json
+
+        # Each appended element is a self-contained JSON event with 'Z' time.
+        first_kr = json.loads(p_appends["satlas:passes:24h:KR"][0])
+        assert first_kr["category"] == "STATION"
+        assert first_kr["entry_time"].endswith("Z")
+
+    @pytest.mark.asyncio
+    async def test_begin_recompute_clears_visits_and_passes_keys(self):
+        with patch(
+            "app.services.visit_frequency.cache_pipeline_delete",
+            new_callable=AsyncMock,
+        ) as mdel:
+            await begin_recompute(["KR", "JP"])
+
+        assert mdel.await_count == 1
+        keys = mdel.call_args.args[0]
+        assert set(keys) == {
+            "satlas:visits:24h:KR",
+            "satlas:visits:24h:JP",
+            "satlas:passes:24h:KR",
+            "satlas:passes:24h:JP",
+        }
 
     @pytest.mark.asyncio
     async def test_rejects_enum_metadata_loudly(self):

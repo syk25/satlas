@@ -476,12 +476,8 @@ async def fetch_and_store_tle(db: AsyncSession, url: str = "") -> int:
     return await refresh_tle(db)
 
 
-async def _fetch_position_rows(db: AsyncSession) -> list[tuple]:
-    """Fetch only the 6 columns needed for position computation.
-
-    Column-level SELECT avoids hydrating full ORM objects — reduces memory
-    by ~5x compared to get_latest_tle_snapshots() on 16,000+ rows.
-    """
+def _position_rows_query():
+    """Shared SELECT used by both batch and streamed callers."""
     from sqlalchemy import func
 
     subq = (
@@ -492,7 +488,7 @@ async def _fetch_position_rows(db: AsyncSession) -> list[tuple]:
         .group_by(TleSnapshot.satellite_id)
         .subquery()
     )
-    q = (
+    return (
         select(
             Satellite.norad_id,
             Satellite.name,
@@ -516,8 +512,30 @@ async def _fetch_position_rows(db: AsyncSession) -> list[tuple]:
         .where(Satellite.is_active == True)  # noqa: E712
         .distinct(Satellite.norad_id)
     )
-    result = await db.execute(q)
+
+
+async def _fetch_position_rows(db: AsyncSession) -> list[tuple]:
+    """Fetch ALL satellite rows in one batch. Used by `warm_positions_cache`
+    (which already holds the full result set in memory to JSON-serialise) and
+    by tests. The chunked recompute path uses `stream_position_rows` instead
+    (ADR-024)."""
+    result = await db.execute(_position_rows_query())
     return result.all()
+
+
+async def stream_position_rows(db: AsyncSession, chunk_size: int = 1000):
+    """Yield row batches via a PG server-side cursor (ADR-024).
+
+    `db.stream(...).partitions(chunk_size)` keeps at most `chunk_size` rows
+    materialised at a time — recompute_visits then processes each chunk and
+    flushes its events to Redis before the next chunk arrives, dropping the
+    16k-row memory peak that previously triggered OOM during the long sweep.
+    """
+    result = await db.stream(
+        _position_rows_query().execution_options(yield_per=chunk_size)
+    )
+    async for chunk in result.partitions(chunk_size):
+        yield chunk
 
 
 async def warm_positions_cache(db: AsyncSession) -> int:

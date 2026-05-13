@@ -97,3 +97,68 @@ async def cache_pipeline_hgetall(keys: list[str]) -> list[dict[str, str]]:
     except RedisError:
         logger.warning("Redis cache_pipeline_hgetall failed")
         return [{} for _ in keys]
+
+
+async def cache_pipeline_delete(keys: list[str]) -> None:
+    """DEL N keys in one pipeline. Used by chunked recompute (ADR-024) at
+    the start of a sweep to clear stale per-country visit/passes data
+    before appending fresh chunks."""
+    if _redis is None or not keys:
+        return
+    try:
+        async with _redis.pipeline(transaction=False) as pipe:
+            for key in keys:
+                pipe.delete(key)
+            await pipe.execute()
+    except RedisError:
+        logger.warning("Redis cache_pipeline_delete failed")
+
+
+async def cache_list_range(key: str, start: int = 0, end: int = -1) -> list[str]:
+    """LRANGE — fetch a slice of a list. Returns [] on missing key or error."""
+    if _redis is None:
+        return []
+    try:
+        return await _redis.lrange(key, start, end)
+    except RedisError:
+        logger.warning("Redis cache_list_range failed", extra={"key": key})
+        return []
+
+
+async def cache_chunk_apply(
+    visits_updates: dict[str, dict[str, int]],
+    passes_appends: dict[str, list[str]],
+    visits_ttl: int,
+    passes_ttl: int,
+) -> None:
+    """Apply one recompute chunk to Redis in a single pipeline.
+
+    `visits_updates[cc][norad_id] = count_delta` → HINCRBY per pair.
+    `passes_appends[cc] = [encoded_event_json, ...]` → RPUSH all events.
+    Every touched key gets its TTL refreshed inside the same pipeline so
+    a long sweep doesn't leave keys expiring mid-write.
+
+    Used by chunked recompute (ADR-024) — replaces the old
+    `cache_hash_set + cache_set` pattern which only worked when the
+    entire result set fit in memory.
+    """
+    if _redis is None:
+        return
+    if not visits_updates and not passes_appends:
+        return
+    try:
+        async with _redis.pipeline(transaction=False) as pipe:
+            for cc_key, counts in visits_updates.items():
+                if not counts:
+                    continue
+                for field, delta in counts.items():
+                    pipe.hincrby(cc_key, field, delta)
+                pipe.expire(cc_key, visits_ttl)
+            for cc_key, encoded_events in passes_appends.items():
+                if not encoded_events:
+                    continue
+                pipe.rpush(cc_key, *encoded_events)
+                pipe.expire(cc_key, passes_ttl)
+            await pipe.execute()
+    except RedisError:
+        logger.warning("Redis cache_chunk_apply failed")

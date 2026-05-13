@@ -172,17 +172,27 @@ async def get_passes(country_code: str) -> Response:
     that fills `passes_24h` on the overhead endpoint, so the two views are
     always in sync. Returns an empty array if the sweep hasn't populated
     this country yet.
+
+    ADR-024: storage changed from a single JSON blob to a Redis list of
+    pre-encoded JSON strings (one element per event) so the chunked
+    recompute can RPUSH events as it discovers them, without ever holding
+    the whole result set in memory. The wire shape stays the same — we
+    stitch the list elements back into a JSON array here.
     """
     cc = country_code.upper()
 
     if not boundaries.country_exists(cc):
         raise HTTPException(status_code=404, detail=f"Country '{cc}' not found.")
 
-    cached = await cache.cache_get(_passes_key(cc))
-    if cached is not None:
-        return Response(content=cached, media_type="application/json")
+    events = await cache.cache_list_range(_passes_key(cc))
+    if not events:
+        return Response(content="[]", media_type="application/json")
 
-    return Response(content="[]", media_type="application/json")
+    # Each element is already a JSON-encoded event object — concatenate
+    # rather than parse+re-serialise so a country with thousands of passes
+    # serves in microseconds even on cache hit.
+    body = "[" + ",".join(events) + "]"
+    return Response(content=body, media_type="application/json")
 
 
 @router.get("/positions", response_model=list[SatellitePosition])
