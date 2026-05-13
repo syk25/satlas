@@ -19,18 +19,4 @@ i18n
     },
   })
 
-// First-visit IP-based language pick. Once the user has toggled (or geo has
-// resolved), localStorage carries the choice forward and we skip this fetch.
-if (typeof window !== 'undefined' && !localStorage.getItem('i18nextLng')) {
-  fetch('/api/geo')
-    .then((r) => r.json())
-    .then((data: { country: string | null }) => {
-      const lng = data.country === 'KR' ? 'ko' : 'en'
-      if (lng !== i18n.language) i18n.changeLanguage(lng)
-    })
-    .catch(() => {
-      /* dev or offline: navigator-based guess from detection.order stays. */
-    })
-}
-
 export default i18n

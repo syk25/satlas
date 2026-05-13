@@ -1,7 +1,29 @@
 # ADR-025: IP-geo language pick + per-country OG image variants
 
-**Status**: Accepted
+**Status**: Superseded (2026-05-13)
 **Date**: 2026-05-13
+
+> **2026-05-13 update.** The implementation shipped (Vercel Edge Function
+> at `frontend/api/geo.ts`, middleware at `frontend/middleware.ts`, Vite
+> plugin emitting `dist/index-ko.html`) was never recognised by the
+> Vercel deployment — `https://satlas.space/api/geo` returned 404 in
+> prod, which silently broke both the first-visit language pick and the
+> KR-geo OG rewrite. The root cause is most likely a project-root /
+> framework-preset interaction in Vercel that we did not chase down.
+>
+> Rather than debug the Vercel side, the decision was rolled back: the
+> Edge Function, middleware, Vite plugin, `og-image-ko.{svg,png}`, the
+> `@vercel/edge` dependency, and the geo-fetch block in `src/i18n.ts`
+> were all removed. Language detection now falls back to the standard
+> `i18next-browser-languagedetector` chain (localStorage → navigator)
+> with no IP component. The English/Korean README pair remains as the
+> visible signal that the site speaks both languages.
+>
+> The body below is preserved as the original decision record. If
+> IP-aware language or OG variants are revisited, this ADR is the
+> starting point — the trade-off table and alternatives are still the
+> right framing; only the Vercel-recognition problem needs solving
+> first.
 
 ---
 
