@@ -11,8 +11,8 @@
 [![ADRs](https://img.shields.io/badge/architecture%20decisions-25-green.svg)](docs/adr/README.md)
 
 <p align="center">
-  <a href="https://youtu.be/NvoHzniUUM0">
-    <img src="https://img.youtube.com/vi/NvoHzniUUM0/maxresdefault.jpg" alt="Satlas 데모 — YouTube에서 보기" width="640" />
+  <a href="https://youtu.be/F69mwx--Ojc">
+    <img src="https://img.youtube.com/vi/F69mwx--Ojc/maxresdefault.jpg" alt="Satlas 데모 — YouTube에서 보기" width="640" />
   </a>
   <br>
   <em>▶ YouTube에서 데모 영상 보기</em>

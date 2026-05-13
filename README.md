@@ -11,8 +11,8 @@
 [![ADRs](https://img.shields.io/badge/architecture%20decisions-25-green.svg)](docs/adr/README.md)
 
 <p align="center">
-  <a href="https://youtu.be/NvoHzniUUM0">
-    <img src="https://img.youtube.com/vi/NvoHzniUUM0/maxresdefault.jpg" alt="Satlas demo — click to play on YouTube" width="640" />
+  <a href="https://youtu.be/F69mwx--Ojc">
+    <img src="https://img.youtube.com/vi/F69mwx--Ojc/maxresdefault.jpg" alt="Satlas demo — click to play on YouTube" width="640" />
   </a>
   <br>
   <em>▶ Watch the demo on YouTube</em>
