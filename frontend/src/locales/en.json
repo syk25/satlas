@@ -89,7 +89,7 @@
     "intro": "Curious what satellites are passing over your country right now? This site answers that at a glance.",
     "why": {
       "title": "Why it exists",
-      "body": "This project was inspired by an aircraft surveillance display I came across during my service in the Air Force, which shows aircraft activity around a country in real time. The framing — \"what's flying over our airspace right now\" — stuck with me. Years later, on a night walk, I noticed bright dots moving overhead. Most of them turned out to be satellites.",
+      "body": "This project was inspired by an aircraft surveillance display I came across during my service in the Air Force, which shows aircraft activity around a country in real time. The framing — \"what's flying over our sky right now\" — stuck with me. Years later, on a night walk, I noticed bright dots moving overhead. Most of them turned out to be satellites.",
       "story": "Searching online, I found 3D globes that placed satellites in orbit and 2D tools that traced individual orbits, but nothing that answered the same question in satellite terms: \"which satellites are over this country right now\". With launches accelerating, the gap felt worth filling."
     },
     "how": {
