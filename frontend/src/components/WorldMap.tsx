@@ -29,6 +29,35 @@ interface Props {
 
 const SAT_CLICK_RADIUS = 8 // px
 
+// Mobile bottom-sheet covers ~72% of viewport height when open. Map operations
+// (setView/fitBounds) should aim the selection at the visible upper strip
+// rather than the geometric centre, otherwise the marker the user just tapped
+// hides behind the sheet they triggered.
+const MOBILE_BREAKPOINT_PX = 768
+const PANEL_HEIGHT_RATIO = 0.72
+
+function isMobileViewport(): boolean {
+  return typeof window !== 'undefined' && window.innerWidth <= MOBILE_BREAKPOINT_PX
+}
+
+function mobilePanelHeightPx(): number {
+  return Math.floor(window.innerHeight * PANEL_HEIGHT_RATIO)
+}
+
+// Shift the target latlng downward in screen space so that after the map
+// centres on it, the marker visually lands in the upper (un-covered) half.
+function centerForSelection(
+  map: L.Map,
+  lat: number,
+  lon: number,
+  zoom: number
+): L.LatLng {
+  if (!isMobileViewport()) return L.latLng(lat, lon)
+  const target = map.project(L.latLng(lat, lon), zoom)
+  const shifted = target.add(L.point(0, mobilePanelHeightPx() / 2))
+  return map.unproject(shifted, zoom)
+}
+
 const COUNTRY_DEFAULT: L.PathOptions = {
   color: 'rgba(255,255,255,0.2)',
   weight: 0.5,
@@ -247,11 +276,12 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
       if (pv.position && typeof pv.position !== 'boolean') {
         const gst = gstime(new Date())
         const geo = eciToGeodetic(pv.position as any, gst)
-        mapRef.current?.setView(
-          [degreesLat(geo.latitude), degreesLong(geo.longitude)],
-          4,
-          { animate: true }
-        )
+        const map = mapRef.current
+        if (map) {
+          const lat = degreesLat(geo.latitude)
+          const lon = degreesLong(geo.longitude)
+          map.setView(centerForSelection(map, lat, lon, 4), 4, { animate: true })
+        }
       }
     } catch {}
   }, [selectedSat])
@@ -292,11 +322,12 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
       if (pv0.position && typeof pv0.position !== 'boolean') {
         const gst0 = gstime(new Date())
         const geo0 = eciToGeodetic(pv0.position as any, gst0)
-        mapRef.current?.setView(
-          [degreesLat(geo0.latitude), degreesLong(geo0.longitude)],
-          4,
-          { animate: true }
-        )
+        const map = mapRef.current
+        if (map) {
+          const lat = degreesLat(geo0.latitude)
+          const lon = degreesLong(geo0.longitude)
+          map.setView(centerForSelection(map, lat, lon, 4), 4, { animate: true })
+        }
       }
     } catch {}
 
@@ -457,8 +488,11 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
                     ? CATEGORY_COLOR[tracked.category]
                     : '#facc15'
 
-                // Camera follow — drag is disabled, no Leaflet conflict
-                map.setView([lat, lon], map.getZoom(), {
+                // Camera follow — drag is disabled, no Leaflet conflict.
+                // On mobile the bottom-sheet covers the lower half, so the
+                // tracked satellite must be aimed at the visible upper strip.
+                const zoomNow = map.getZoom()
+                map.setView(centerForSelection(map, lat, lon, zoomNow), zoomNow, {
                   animate: false,
                   noMoveStart: true,
                 } as L.ZoomPanOptions)
@@ -705,8 +739,10 @@ export const WorldMap = forwardRef<WorldMapHandle, Props>(function WorldMap(
         ;(lyr as L.Path).setStyle(COUNTRY_FOCUSED)
         selectedLayerRef.current = lyr
         if (!trackingJustStoppedRef.current) {
+          const panelPx = isMobileViewport() ? mobilePanelHeightPx() : 0
           mapRef.current?.fitBounds((lyr as L.GeoJSON).getBounds(), {
-            padding: [60, 60],
+            paddingTopLeft: [60, 60],
+            paddingBottomRight: [60, 60 + panelPx],
             maxZoom: 6,
           })
         }
