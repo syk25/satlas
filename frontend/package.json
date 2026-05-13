@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@types/leaflet": "^1.9.21",
+    "@vercel/analytics": "^2.0.1",
     "i18next": "^26.0.10",
     "i18next-browser-languagedetector": "^8.2.1",
     "leaflet": "^1.9.4",
