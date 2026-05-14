@@ -5,11 +5,10 @@ import secrets
 import time
 
 import sentry_sdk
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.config import settings
-from app.database import AsyncSessionLocal, get_db
+from app.database import AsyncSessionLocal
 from app.services import boundaries
 from app.services.db_retry import run_with_db_retry
 from app.services.tle_ingest import (
@@ -139,17 +138,14 @@ def _chunk_to_satellites(chunk_rows) -> list[dict]:
 
 
 @router.post("/visits/recompute")
-async def recompute_visits(
-    request: Request,
-    db: AsyncSession = Depends(get_db),  # noqa: B008
-) -> dict:
+async def recompute_visits(request: Request) -> dict:
     """Recompute 24-hour pass counts + timeline per country.
 
     ADR-019 introduced the sweep; ADR-024 made it chunked. Earlier
     versions built the whole result set in memory before writing to
     Redis — for the production catalog (16k+ satellites, ~80k pass
     events, 12-min walk) that produced an 860MB RSS peak that OOM-killed
-    uvicorn before the write step could land. The new flow:
+    uvicorn before the write step could land. The flow:
 
     1. Clear `satlas:visits:24h:*` and `satlas:passes:24h:*` up front so
        chunk-level HINCRBY / RPUSH start from a clean slate.
@@ -160,6 +156,12 @@ async def recompute_visits(
     4. Close the per-request Sentry transaction at the start of the
        handler — a 12-minute span chain would accumulate enough metadata
        to OOM on its own under sentry-asgi's default sampling.
+
+    The whole sweep is wrapped in `run_with_db_retry`: the Fly Postgres
+    cluster occasionally drops the asyncpg connection mid-cursor (the
+    same pattern documented for tle/ingest). Each retry resets Redis via
+    begin_recompute and streams the catalog fresh — safe because the
+    destination keys are cleared at the start of every attempt.
     """
     _verify_token(request)
 
@@ -171,62 +173,76 @@ async def recompute_visits(
     if scope.transaction is not None:
         scope.transaction.finish()
 
-    # Clean slate. Iterating the polygon dict gives us every ISO-A2 code
-    # for which we might ever store pass data.
+    # Iterating the polygon dict gives us every ISO-A2 code for which we
+    # might ever store pass data.
     country_codes = list(boundaries._country_polygons.keys())
-    await begin_recompute(country_codes)
 
-    t0 = time.time()
-    total_satellites = 0
-    total_pairs = 0
-    total_timelines = 0
-    countries_touched: set[str] = set()
+    async def _attempt() -> dict:
+        # Clean slate on every attempt — restart is idempotent.
+        await begin_recompute(country_codes)
 
-    async for chunk_rows in stream_position_rows(db, chunk_size=RECOMPUTE_CHUNK_SIZE):
-        chunk_satellites = _chunk_to_satellites(chunk_rows)
-        if not chunk_satellites:
-            del chunk_rows
-            continue
+        t0 = time.time()
+        total_satellites = 0
+        total_pairs = 0
+        total_timelines = 0
+        countries_touched: set[str] = set()
 
-        chunk_passes = await asyncio.to_thread(compute_24h_passes, chunk_satellites)
-        pairs, events = await store_passes_chunk(chunk_passes)
+        # Fresh session per attempt — same-session retry after a broken
+        # connection would just hit the same dead pool slot.
+        async with AsyncSessionLocal() as db:
+            async for chunk_rows in stream_position_rows(
+                db, chunk_size=RECOMPUTE_CHUNK_SIZE
+            ):
+                chunk_satellites = _chunk_to_satellites(chunk_rows)
+                if not chunk_satellites:
+                    del chunk_rows
+                    continue
 
-        total_satellites += len(chunk_satellites)
-        total_pairs += pairs
-        total_timelines += events
-        countries_touched.update(chunk_passes.keys())
+                chunk_passes = await asyncio.to_thread(
+                    compute_24h_passes, chunk_satellites
+                )
+                pairs, events = await store_passes_chunk(chunk_passes)
 
-        # Memory hygiene: drop chunk references explicitly and force a
-        # collection so the next chunk starts from a clean baseline. SGP4
-        # propagation produces a lot of short-lived Python objects that
-        # CPython's generational collector takes a while to reclaim on its
-        # own — without this, RSS climbs chunk-by-chunk even though each
-        # chunk is small.
-        del chunk_rows, chunk_satellites, chunk_passes
-        gc.collect()
+                total_satellites += len(chunk_satellites)
+                total_pairs += pairs
+                total_timelines += events
+                countries_touched.update(chunk_passes.keys())
 
-    if total_satellites == 0:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="No satellites in DB yet.",
+                # Memory hygiene: drop chunk references explicitly and force a
+                # collection so the next chunk starts from a clean baseline.
+                # SGP4 propagation produces a lot of short-lived Python objects
+                # that CPython's generational collector takes a while to
+                # reclaim on its own — without this, RSS climbs chunk-by-chunk
+                # even though each chunk is small.
+                del chunk_rows, chunk_satellites, chunk_passes
+                gc.collect()
+
+        if total_satellites == 0:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="No satellites in DB yet.",
+            )
+
+        elapsed = time.time() - t0
+        logger.info(
+            "visits/recompute: %d sats, %d countries, %d pairs, %d events in %.1fs",
+            total_satellites,
+            len(countries_touched),
+            total_pairs,
+            total_timelines,
+            elapsed,
         )
+        if elapsed > 600:
+            logger.warning("visits/recompute exceeded 10 minutes: %.1fs", elapsed)
 
-    elapsed = time.time() - t0
-    logger.info(
-        "visits/recompute: %d satellites, %d countries, %d pairs, %d events in %.1fs",
-        total_satellites,
-        len(countries_touched),
-        total_pairs,
-        total_timelines,
-        elapsed,
-    )
-    if elapsed > 600:
-        logger.warning("visits/recompute exceeded 10 minutes: %.1fs", elapsed)
+        return {
+            "satellites": total_satellites,
+            "countries": len(countries_touched),
+            "pairs": total_pairs,
+            "timelines": total_timelines,
+            "elapsed_seconds": round(elapsed, 1),
+        }
 
-    return {
-        "satellites": total_satellites,
-        "countries": len(countries_touched),
-        "pairs": total_pairs,
-        "timelines": total_timelines,
-        "elapsed_seconds": round(elapsed, 1),
-    }
+    # 2 attempts: one retry is enough for a transient drop, and each
+    # attempt is expensive (~12 min) — more retries would waste compute.
+    return await run_with_db_retry(_attempt, label="visits/recompute", attempts=2)
