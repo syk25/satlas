@@ -36,6 +36,7 @@ An ADR documents a significant architectural decision: what was decided, why, an
 | [ADR-024](ADR-024-chunked-visits-recompute.md) | Chunked visits/recompute + Redis list storage | Accepted |
 | [ADR-025](ADR-025-ip-geo-i18n-and-dynamic-og.md) | IP-geo language pick + per-country OG image variants | Superseded |
 | [ADR-026](ADR-026-qa-environment-strategy.md) | QA Environment Strategy — Vercel Preview First, Backend QA Deferred | Accepted |
+| [ADR-027](ADR-027-postgres-vm-scale-up.md) | Postgres VM Scale-Up — shared-cpu-2x + 2GB | Accepted |
 
 ---
 
