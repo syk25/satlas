@@ -125,3 +125,42 @@ Concretely:
 - When the first trigger fires (e.g., a schema-heavy migration), spin
   up a temporary `satlas-api-staging` Fly app, run the change there,
   then tear it down. Revisit this ADR if the pattern repeats.
+
+---
+
+## Adopted Workflow Conventions (2026-05-14)
+
+After this ADR was accepted, the concrete day-to-day practice was
+nailed down:
+
+### Branch naming
+
+- `feat/<short-description>` — new features
+- `fix/<short-description>` — bug fixes
+- `docs/<short-description>` — documentation
+- `refactor/<short-description>` — code-shape changes only
+
+### Pull Request flow
+
+All changes flow through a Pull Request and merge via the GitHub
+"Merge" button. The PR number lives in the merge commit and on the
+repo's contribution history — useful for portfolio tracing and for
+correlating Sentry / GHA failures with the change that introduced them.
+
+### Preview validation
+
+Required for any change touching `frontend/**`. Vercel creates a
+Preview deployment per branch automatically; manual validation on the
+Preview URL is the gate before merge.
+
+Backend-only changes (`backend/**`), ADRs, README, and ops docs do not
+benefit from Vercel Preview — Fly deploys from `main` only. These
+changes still flow through a branch + PR for review hygiene and to keep
+CI workflow runs attached to the change, but the "smoke test on
+Preview" step is skipped.
+
+### Exceptions
+
+None. Even one-line fixes go through a branch + PR. The cost is small;
+the consistency is what keeps the discipline intact — exceptions accrue
+and the QA path gradually erodes back to "push to main."
