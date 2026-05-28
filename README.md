@@ -4,6 +4,8 @@
 
 **See which satellites are flying over each country, in real time.**
 
+Quick Start
+
 🛰️ Live: **[satlas.space](https://satlas.space)**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -20,7 +22,7 @@
 
 ---
 
-## Why Satlas
+## Why Satlas / Motivation
 
 Existing satellite tracking tools answer one of two questions:
 
@@ -38,7 +40,7 @@ This project was inspired by an aircraft surveillance display I came across duri
 
 ---
 
-## Features
+## Features / Usage
 
 - 🗺️ **Click any country** on a 2D world map → every satellite currently overhead
 - 🏷️ **Filter by category** — Starlink, GPS, weather, science, military, ...
