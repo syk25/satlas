@@ -149,5 +149,11 @@
   },
   "onboarding": {
     "mapHint": "Select any country to see what's overhead"
+  },
+  "maintenance": {
+    "title": "Satlas is under maintenance",
+    "subtitle": "We'll be back soon. In the meantime, here's a demo of what Satlas does:",
+    "videoUnavailable": "Demo video unavailable.",
+    "github": "View the project on GitHub"
   }
 }

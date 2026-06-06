@@ -149,5 +149,11 @@
   },
   "onboarding": {
     "mapHint": "국가를 선택하면 상공 위성이 표시됩니다"
+  },
+  "maintenance": {
+    "title": "Satlas는 현재 점검 중입니다",
+    "subtitle": "곧 다시 돌아올게요. 그동안 Satlas 데모 영상으로 둘러보세요:",
+    "videoUnavailable": "데모 영상을 불러올 수 없습니다.",
+    "github": "GitHub에서 프로젝트 보기"
   }
 }
